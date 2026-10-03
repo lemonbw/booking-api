@@ -3,6 +3,7 @@ package httpapi
 import (
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -45,8 +46,16 @@ func AuthenticatorFromConfig(cfg AuthConfig) (Authenticator, error) {
 			issuer:   cfg.Issuer,
 			audience: cfg.Audience,
 		}, nil
+	case "header":
+		if strings.TrimSpace(cfg.HeaderName) == "" {
+			return nil, errors.New("AUTH_MODE=header requires AUTH_HEADER_NAME")
+		}
+		if len(cfg.HeaderSecret) < 32 {
+			return nil, errors.New("AUTH_MODE=header requires AUTH_HEADER_SECRET of at least 32 characters")
+		}
+		return &HeaderAuthenticator{name: cfg.HeaderName, secret: cfg.HeaderSecret}, nil
 	default:
-		return nil, fmt.Errorf("unknown AUTH_MODE %q (expected none or jwt)", cfg.Mode)
+		return nil, fmt.Errorf("unknown AUTH_MODE %q (expected none, jwt or header)", cfg.Mode)
 	}
 }
 
@@ -146,4 +155,26 @@ func audienceMatches(aud, want string) bool {
 		}
 	}
 	return false
+}
+
+type HeaderAuthenticator struct {
+	name   string
+	secret string
+}
+
+func (a *HeaderAuthenticator) Authenticate(r *http.Request) (usecase.Principal, error) {
+	subject := strings.TrimSpace(r.Header.Get(a.name))
+	if subject == "" {
+		return usecase.Principal{}, ErrUnauthenticated
+	}
+	provided := strings.TrimSpace(r.Header.Get("Authorization"))
+	want := "Bearer " + a.secret
+	if subtle.ConstantTimeCompare([]byte(provided), []byte(want)) != 1 {
+		return usecase.Principal{}, ErrUnauthenticated
+	}
+	return usecase.Principal{
+		Subject:       subject,
+		DisplayName:   subject,
+		Authenticated: true,
+	}, nil
 }
