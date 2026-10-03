@@ -14,17 +14,7 @@ import (
 type Config struct {
 	HTTP     HTTP
 	Database Database
-	Security Security
 	Log      logger.Config
-}
-
-type Security struct {
-	AuthMode     string
-	JWTSecret    string
-	JWTIssuer    string
-	JWTAudience  string
-	HeaderName   string
-	HeaderSecret string
 }
 
 type HTTP struct {
@@ -69,13 +59,8 @@ func Load() (Config, error) {
 			ConnectTimeout:  envDuration("DB_CONNECT_TIMEOUT", 5*time.Second),
 			WaitTimeout:     envDuration("DB_WAIT_TIMEOUT", 60*time.Second),
 		},
-		Security: Security{
-			AuthMode:     strings.ToLower(env("AUTH_MODE", "none")),
-			JWTSecret:    os.Getenv("AUTH_JWT_SECRET"),
-			JWTIssuer:    env("AUTH_JWT_ISSUER", ""),
-			JWTAudience:  env("AUTH_JWT_AUDIENCE", ""),
-			HeaderName:   env("AUTH_HEADER_NAME", "X-User-Name"),
-			HeaderSecret: os.Getenv("AUTH_HEADER_SECRET"),
+		Booking: Booking{
+			MaxSeriesOccurrence: envInt("BOOKING_MAX_SERIES_OCCURRENCES", 52),
 		},
 		Log: logger.Config{
 			Level:  env("LOG_LEVEL", "info"),
@@ -115,6 +100,9 @@ func (c Config) validate() error {
 	}
 	if c.HTTP.MaxRequestBody <= 0 {
 		errs = append(errs, errors.New("HTTP_MAX_BODY_BYTES must be positive"))
+	}
+	if c.Booking.MaxSeriesOccurrence <= 0 {
+		errs = append(errs, errors.New("BOOKING_MAX_SERIES_OCCURRENCES must be positive"))
 	}
 	return errors.Join(errs...)
 }
