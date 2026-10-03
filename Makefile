@@ -1,8 +1,9 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-BINARY := bin/booking-api
-PKG    := ./...
+BINARY  := bin/booking-api
+PKG     := ./...
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 
 .PHONY: help
 help: ## Show this help
@@ -11,7 +12,9 @@ help: ## Show this help
 .PHONY: build
 build: ## Compile the service into ./bin
 	@mkdir -p bin
-	go build -trimpath -o $(BINARY) ./cmd/app
+	go build -trimpath \
+		-ldflags="-s -w -X github.com/lemonbw/booking-api/internal/platform/version.Version=$(VERSION)" \
+		-o $(BINARY) ./cmd/app
 
 .PHONY: test
 test: ## Run all unit tests with the race detector
@@ -27,7 +30,8 @@ vet: ## Run go vet
 
 .PHONY: up
 up: ## Build and start the API + database
-	docker compose up --build
+	docker compose build --build-arg VERSION=$(VERSION)
+	docker compose up
 
 .PHONY: down
 down: ## Stop the stack
