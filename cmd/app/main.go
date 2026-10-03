@@ -62,10 +62,22 @@ func run() error {
 	clk := clock.New()
 	svc := usecase.NewBookingService(bookingRepo, roomRepo, clk, idgen.NewUUIDGenerator(), log, cfg.Booking.MaxSeriesOccurrence, cfg.Booking.PageSize)
 
+	auth, err := httpapi.AuthenticatorFromConfig(httpapi.AuthConfig{
+		Mode:         cfg.Security.AuthMode,
+		JWTSecret:    cfg.Security.JWTSecret,
+		Issuer:       cfg.Security.JWTIssuer,
+		Audience:     cfg.Security.JWTAudience,
+		HeaderName:   cfg.Security.HeaderName,
+		HeaderSecret: cfg.Security.HeaderSecret,
+	})
+	if err != nil {
+		return err
+	}
+
 	handler := httpapi.NewHandler(svc, log, clk.Now)
 	srv := &http.Server{
 		Addr:              cfg.HTTP.Addr,
-		Handler:           httpapi.NewRouter(handler, pool),
+		Handler:           httpapi.NewRouter(handler, pool, auth, log),
 		ReadTimeout:       cfg.HTTP.ReadTimeout,
 		ReadHeaderTimeout: cfg.HTTP.ReadHeaderTimeout,
 		WriteTimeout:      cfg.HTTP.WriteTimeout,

@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"strconv"
 )
@@ -14,7 +15,7 @@ type HealthChecker interface {
 	Ping(ctx context.Context) error
 }
 
-func NewRouter(h *Handler, health HealthChecker) http.Handler {
+func NewRouter(h *Handler, health HealthChecker, auth Authenticator, log *slog.Logger) http.Handler {
 	mux := http.NewServeMux()
 
 	api := http.NewServeMux()
@@ -26,7 +27,7 @@ func NewRouter(h *Handler, health HealthChecker) http.Handler {
 	api.HandleFunc("GET /rooms", h.ListRooms)
 	api.HandleFunc("GET /rooms/{id}", h.GetRoom)
 
-	mux.Handle("/api/v1/", http.StripPrefix("/api/v1", api))
+	mux.Handle("/api/v1/", http.StripPrefix("/api/v1", authMiddleware(api, auth, log)))
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
