@@ -122,6 +122,8 @@ func (h *Handler) writeServiceError(w http.ResponseWriter, r *http.Request, err 
 	case errors.Is(err, domain.ErrInvalidTimeRange), errors.Is(err, domain.ErrInvalidUserName),
 		errors.Is(err, domain.ErrInvalidRoomID), errors.Is(err, domain.ErrInvalidBookingID),
 		errors.Is(err, domain.ErrBookingInPast):
+		writeError(w, http.StatusBadRequest, "validation_failed", "", err.Error())
+
 	case errors.Is(err, domain.ErrOverlap):
 		writeError(w, http.StatusConflict, "booking_conflict", "time_range", "the room is already booked for the requested interval")
 
