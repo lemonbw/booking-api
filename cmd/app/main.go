@@ -81,6 +81,12 @@ func run() error {
 		return err
 	}
 
+	svc.StartRetentionSweep(rootCtx, usecase.PurgeRetention{
+		Retention: cfg.Operations.Retention,
+		Interval:  cfg.Operations.PurgeInterval,
+		Batch:     cfg.Operations.PurgeBatch,
+	})
+
 	handler := httpapi.NewHandler(svc, log, clk.Now)
 	srv := &http.Server{
 		Addr:              cfg.HTTP.Addr,

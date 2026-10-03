@@ -46,6 +46,7 @@ type HTTP struct {
 }
 
 type Operations struct {
+	Retention     time.Duration
 	PurgeInterval time.Duration
 	PurgeBatch    int
 }
@@ -87,6 +88,7 @@ func Load() (Config, error) {
 			PageSize:            envInt("BOOKING_PAGE_SIZE", 100),
 		},
 		Operations: Operations{
+			Retention:     envDuration("RETENTION_CANCELLED", 90*24*time.Hour),
 			PurgeInterval: envDuration("PURGE_INTERVAL", time.Hour),
 			PurgeBatch:    envInt("PURGE_BATCH_SIZE", 500),
 		},
@@ -152,6 +154,9 @@ func (c Config) validate() error {
 		if len(c.Security.HeaderSecret) < 32 {
 			errs = append(errs, errors.New("AUTH_HEADER_SECRET must be at least 32 characters"))
 		}
+	}
+	if c.Operations.Retention < 0 {
+		errs = append(errs, errors.New("RETENTION_CANCELLED must not be negative"))
 	}
 	if c.Operations.PurgeInterval <= 0 {
 		errs = append(errs, errors.New("PURGE_INTERVAL must be positive"))
