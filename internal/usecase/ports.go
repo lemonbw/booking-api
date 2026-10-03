@@ -19,6 +19,8 @@ type BookingRepository interface {
 	FindActiveOverlapping(ctx context.Context, roomID domain.RoomID, r domain.TimeRange) ([]domain.Booking, error)
 
 	Cancel(ctx context.Context, id domain.BookingID, at time.Time) (domain.Booking, error)
+
+	PurgeCancelledBefore(ctx context.Context, before time.Time, batch int) (int64, error)
 }
 type RoomRepository interface {
 	GetByID(ctx context.Context, id domain.RoomID) (domain.Room, error)
