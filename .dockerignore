@@ -1,0 +1,15 @@
+.git
+.gitignore
+Notes.md
+README.md
+docker-compose.yml
+.env
+.env.local
+bin/
+dist/
+coverage.out
+coverage.html
+scripts/
+Makefile
+.golangci.yml
+api/
