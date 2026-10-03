@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -16,6 +17,10 @@ import (
 
 //go:embed migrations/*.sql
 var migrationFS embed.FS
+
+const migrationsLockKey int64 = 8_240_117_113_004_2
+
+const migrationsLockTimeout = 30 * time.Second
 
 func Migrate(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger) error {
 	if log == nil {
@@ -26,6 +31,10 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger) error {
 		return fmt.Errorf("begin migrations transaction: %w", translateError(err))
 	}
 	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
+
+	if err := lockMigrations(ctx, tx, log); err != nil {
+		return err
+	}
 
 	if err := ensureMigrationsTable(ctx, tx); err != nil {
 		return err
@@ -58,6 +67,34 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger) error {
 		return fmt.Errorf("commit migrations: %w", translateError(err))
 	}
 	return nil
+}
+
+func lockMigrations(ctx context.Context, tx pgx.Tx, log *slog.Logger) error {
+	deadline := time.Now().Add(migrationsLockTimeout)
+	backoff := 50 * time.Millisecond
+
+	for {
+		var acquired bool
+		if err := tx.QueryRow(ctx, `SELECT pg_try_advisory_xact_lock($1)`, migrationsLockKey).Scan(&acquired); err != nil {
+			return fmt.Errorf("acquire migrations lock: %w", translateError(err))
+		}
+		if acquired {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("another instance has held the migrations lock for more than %s", migrationsLockTimeout)
+		}
+		log.Info("waiting for the migrations lock", "holder", "another instance is migrating")
+
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("wait for migrations lock: %w", ctx.Err())
+		case <-time.After(backoff):
+		}
+		if backoff < time.Second {
+			backoff *= 2
+		}
+	}
 }
 func ensureMigrationsTable(ctx context.Context, tx pgx.Tx) error {
 	const q = `
