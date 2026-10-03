@@ -71,7 +71,7 @@ type Database struct {
 func Load() (Config, error) {
 	cfg := Config{
 		HTTP: HTTP{
-			Addr:              env("HTTP_ADDR", ":8080"),
+			Addr:              envExact("HTTP_ADDR", ":8080"),
 			ReadTimeout:       envDuration("HTTP_READ_TIMEOUT", 10*time.Second),
 			ReadHeaderTimeout: envDuration("HTTP_READ_HEADER_TIMEOUT", 5*time.Second),
 			WriteTimeout:      envDuration("HTTP_WRITE_TIMEOUT", 15*time.Second),
@@ -80,7 +80,7 @@ func Load() (Config, error) {
 			MaxRequestBody:    int64(envInt("HTTP_MAX_BODY_BYTES", 64*1024)),
 		},
 		Database: Database{
-			URL:             env("DATABASE_URL", "postgres://booking:booking@localhost:5432/booking?sslmode=disable"),
+			URL:             envExact("DATABASE_URL", "postgres://booking:booking@localhost:5432/booking?sslmode=disable"),
 			MaxConns:        int32(envInt("DB_MAX_CONNS", 10)),
 			MinConns:        int32(envInt("DB_MIN_CONNS", 1)),
 			MaxConnLifetime: envDuration("DB_MAX_CONN_LIFETIME", time.Hour),
@@ -105,7 +105,7 @@ func Load() (Config, error) {
 			JWTSecret:    os.Getenv("AUTH_JWT_SECRET"),
 			JWTIssuer:    env("AUTH_JWT_ISSUER", ""),
 			JWTAudience:  env("AUTH_JWT_AUDIENCE", ""),
-			HeaderName:   env("AUTH_HEADER_NAME", "X-User-Name"),
+			HeaderName:   envExact("AUTH_HEADER_NAME", "X-User-Name"),
 			HeaderSecret: os.Getenv("AUTH_HEADER_SECRET"),
 		},
 		Log: logger.Config{
@@ -187,6 +187,12 @@ func (c Config) validate() error {
 }
 func env(key, fallback string) string {
 	if v, ok := os.LookupEnv(key); ok && strings.TrimSpace(v) != "" {
+		return strings.TrimSpace(v)
+	}
+	return fallback
+}
+func envExact(key, fallback string) string {
+	if v, ok := os.LookupEnv(key); ok {
 		return strings.TrimSpace(v)
 	}
 	return fallback
