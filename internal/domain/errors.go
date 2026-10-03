@@ -22,6 +22,10 @@ var (
 
 	ErrInvalidRoomID = errors.New("room_id must be a positive integer")
 
+	ErrInvalidInterval = errors.New("interval must be a positive duration")
+
+	ErrSeriesTooLong = errors.New("too many occurrences requested")
+
 	ErrForbidden = errors.New("the authenticated identity is not allowed to act on this resource")
 
 	ErrBookingAlreadyStarted = errors.New("booking has already started and can no longer be cancelled")
@@ -50,3 +54,13 @@ func (e *FieldError) Unwrap() error { return e.err }
 func NewFieldError(field string, err error) *FieldError {
 	return &FieldError{Field: field, Message: err.Error(), err: err}
 }
+
+type ConflictError struct {
+	RoomID    RoomID
+	Conflicts []Booking
+}
+
+func (e *ConflictError) Error() string {
+	return fmt.Sprintf("%s: room=%d conflicts=%d", ErrOverlap.Error(), e.RoomID, len(e.Conflicts))
+}
+func (e *ConflictError) Unwrap() error { return ErrOverlap }
