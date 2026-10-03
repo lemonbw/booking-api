@@ -111,20 +111,17 @@ func (h *Handler) GetRoom(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, newRoomResponse(room))
 }
 func (h *Handler) writeServiceError(w http.ResponseWriter, r *http.Request, err error) {
+	var fieldErr *domain.FieldError
 	switch {
+	case errors.As(err, &fieldErr):
+		writeError(w, http.StatusBadRequest, "validation_failed", fieldErr.Field, err.Error())
+
 	case errors.Is(err, context.DeadlineExceeded):
 		writeError(w, http.StatusGatewayTimeout, "timeout", "", "the request took too long to complete")
 
 	case errors.Is(err, domain.ErrInvalidTimeRange), errors.Is(err, domain.ErrInvalidUserName),
 		errors.Is(err, domain.ErrInvalidRoomID), errors.Is(err, domain.ErrInvalidBookingID),
 		errors.Is(err, domain.ErrBookingInPast):
-		var fieldErr *domain.FieldError
-		field := ""
-		if errors.As(err, &fieldErr) {
-			field = fieldErr.Field
-		}
-		writeError(w, http.StatusBadRequest, "validation_failed", field, err.Error())
-
 	case errors.Is(err, domain.ErrOverlap):
 		writeError(w, http.StatusConflict, "booking_conflict", "time_range", "the room is already booked for the requested interval")
 
