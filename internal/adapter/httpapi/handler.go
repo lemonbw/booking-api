@@ -218,7 +218,7 @@ func optionalNonNegativeIntQuery(r *http.Request, key string) (int, error) {
 		return 0, nil
 	}
 	value, err := strconv.Atoi(raw)
-	if err != nil {
+	if err != nil || value < 0 {
 		return 0, domain.NewFieldError(key, errors.New("must be a non-negative integer"))
 	}
 	return value, nil
