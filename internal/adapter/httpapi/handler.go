@@ -93,7 +93,7 @@ func (h *Handler) ListRoomBookings(w http.ResponseWriter, r *http.Request) {
 		h.writeServiceError(w, r, err)
 		return
 	}
-	limit, err := optionalPositiveIntQuery(r, "limit")
+	limit, err := optionalPageSizeQuery(r, "limit")
 	if err != nil {
 		h.writeServiceError(w, r, err)
 		return
@@ -200,14 +200,14 @@ func requiredInt64Query(r *http.Request, key string) (int64, error) {
 	return value, nil
 }
 
-func optionalPositiveIntQuery(r *http.Request, key string) (int, error) {
+func optionalPageSizeQuery(r *http.Request, key string) (int, error) {
 	raw := r.URL.Query().Get(key)
 	if raw == "" {
 		return 0, nil
 	}
 	value, err := strconv.Atoi(raw)
-	if err != nil || value <= 0 {
-		return 0, domain.NewFieldError(key, errors.New("must be a positive integer"))
+	if err != nil || value < 0 {
+		return 0, domain.NewFieldError(key, errors.New("must be a non-negative integer"))
 	}
 	return value, nil
 }
