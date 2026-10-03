@@ -50,5 +50,5 @@ func NewRouter(h *Handler, health HealthChecker, auth Authenticator, log *slog.L
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
 	})
 
-	return metricsMiddleware(metrics)(mux)
+	return requestIDMiddleware(metricsMiddleware(metrics)(mux))
 }
