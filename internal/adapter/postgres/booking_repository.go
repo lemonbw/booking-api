@@ -257,3 +257,22 @@ const (
 	cancelOutcomeCancelled      = "cancelled"
 	cancelOutcomeAlreadyStarted = "already_started"
 )
+
+func (r *BookingRepository) PurgeCancelledBefore(ctx context.Context, before time.Time, batch int) (int64, error) {
+	const q = `
+		WITH victims AS (
+			SELECT id
+			FROM bookings
+			WHERE status = 'cancelled' AND cancelled_at < $1
+			ORDER BY cancelled_at
+			LIMIT $2
+		)
+		DELETE FROM bookings b USING victims
+		WHERE b.id = victims.id`
+
+	tag, err := r.db.Exec(ctx, q, before, batch)
+	if err != nil {
+		return 0, fmt.Errorf("purge cancelled bookings: %w", translateError(err))
+	}
+	return tag.RowsAffected(), nil
+}
