@@ -22,15 +22,11 @@ var (
 
 	ErrInvalidRoomID = errors.New("room_id must be a positive integer")
 
-	ErrForbidden = errors.New("the authenticated identity is not allowed to act on this resource")
-
 	ErrInvalidInterval = errors.New("interval must be a positive duration")
 
 	ErrSeriesTooLong = errors.New("too many occurrences requested")
 
 	ErrBookingAlreadyStarted = errors.New("booking has already started and can no longer be cancelled")
-
-	ErrRoomDeleted = errors.New("room was deleted while the booking was being created")
 
 	ErrUnavailable = errors.New("dependency is temporarily unavailable")
 
