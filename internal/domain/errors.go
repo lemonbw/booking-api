@@ -30,6 +30,8 @@ var (
 
 	ErrBookingAlreadyStarted = errors.New("booking has already started and can no longer be cancelled")
 
+	ErrRoomDeleted = errors.New("room was deleted while the booking was being created")
+
 	ErrUnavailable = errors.New("dependency is temporarily unavailable")
 
 	ErrIntegrity = errors.New("data integrity violation")

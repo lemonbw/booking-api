@@ -202,6 +202,12 @@ func translateError(err error) error {
 		}
 		return fmt.Errorf("%w: constraint %s", domain.ErrIntegrity, pgErr.ConstraintName)
 
+	case pgErr.Code == sqlStateForeignKeyViolation:
+		if pgErr.ConstraintName == constraintRoomForeignKey {
+			return fmt.Errorf("%w: constraint %s", domain.ErrRoomDeleted, pgErr.ConstraintName)
+		}
+		return fmt.Errorf("%w: foreign key %s violated", domain.ErrIntegrity, pgErr.ConstraintName)
+
 	case pgErr.Code == sqlStateCheckViolation:
 		if pgErr.ConstraintName == constraintTimeOrder {
 			return fmt.Errorf("%w: constraint %s", domain.ErrInvalidTimeRange, pgErr.ConstraintName)
