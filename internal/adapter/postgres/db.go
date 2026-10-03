@@ -6,11 +6,14 @@ import (
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/lemonbw/booking-api/internal/domain"
 )
 
 type Config struct {
@@ -97,3 +100,93 @@ var (
 	_ Querier = (*pgxpool.Pool)(nil)
 	_ Querier = (pgx.Tx)(nil)
 )
+
+const (
+	sqlStateExclusionViolation  = "23P01"
+	sqlStateForeignKeyViolation = "23503"
+	sqlStateCheckViolation      = "23514"
+	sqlStateUniqueViolation     = "23505"
+	sqlStateDeadlockDetected    = "40P01"
+	sqlStateSerializationFail   = "40001"
+	sqlStateQueryCanceled       = "57014"
+	sqlStateLockNotAvailable    = "55P03"
+	sqlStateTooManyConnections  = "53300"
+	sqlStateCannotConnectNow    = "57P03"
+	sqlStateAdminShutdown       = "57P01"
+	sqlStateCrashShutdown       = "57P02"
+	sqlStateClass08             = "08"
+)
+
+const (
+	constraintRoomNoOverlap  = "bookings_room_no_overlap"
+	constraintRoomForeignKey = "bookings_room_id_fkey"
+	constraintTimeOrder      = "bookings_time_order"
+)
+
+func translateError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		if isTransportError(err) {
+			return fmt.Errorf("%w: %w", domain.ErrUnavailable, err)
+		}
+		return err
+	}
+	switch {
+	case pgErr.Code == sqlStateExclusionViolation:
+		if pgErr.ConstraintName == constraintRoomNoOverlap {
+			return fmt.Errorf("%w: constraint %s", domain.ErrOverlap, pgErr.ConstraintName)
+		}
+		return fmt.Errorf("%w: constraint %s", domain.ErrIntegrity, pgErr.ConstraintName)
+
+	case pgErr.Code == sqlStateCheckViolation:
+		if pgErr.ConstraintName == constraintTimeOrder {
+			return fmt.Errorf("%w: constraint %s", domain.ErrInvalidTimeRange, pgErr.ConstraintName)
+		}
+		return fmt.Errorf("%w: check constraint %s violated", domain.ErrIntegrity, pgErr.ConstraintName)
+
+	case pgErr.Code == sqlStateUniqueViolation:
+
+		return fmt.Errorf("%w: unique constraint %s violated", domain.ErrIntegrity, pgErr.ConstraintName)
+
+	case pgErr.Code == sqlStateSerializationFail, pgErr.Code == sqlStateDeadlockDetected,
+		pgErr.Code == sqlStateLockNotAvailable, pgErr.Code == sqlStateQueryCanceled,
+		pgErr.Code == sqlStateTooManyConnections, pgErr.Code == sqlStateCannotConnectNow,
+		pgErr.Code == sqlStateAdminShutdown, pgErr.Code == sqlStateCrashShutdown,
+		strings.HasPrefix(pgErr.Code, sqlStateClass08):
+		return fmt.Errorf("%w: %s", domain.ErrUnavailable, pgErr.Code)
+
+	default:
+		return err
+	}
+}
+func isTransportError(err error) bool {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return !errors.Is(err, context.Canceled)
+	}
+	msg := err.Error()
+	for _, needle := range []string{
+		"conn closed",
+		"connection refused",
+		"connection reset",
+		"broken pipe",
+		"closed pool",
+		"no connection",
+		"unexpected EOF",
+		"failed to connect",
+		"host is down",
+		"could not connect",
+		"timeout",
+		"deadline exceeded",
+		"pool is closed",
+		"write: broken",
+		"read: connection",
+	} {
+		if strings.Contains(msg, needle) {
+			return true
+		}
+	}
+	return false
+}
