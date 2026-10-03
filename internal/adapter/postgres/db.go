@@ -16,6 +16,58 @@ import (
 	"github.com/lemonbw/booking-api/internal/domain"
 )
 
+type ErrorObserver interface {
+	CountDatabaseError(sqlstate string)
+}
+
+type observerKey struct{}
+
+type observedDB struct {
+	DB
+	observer ErrorObserver
+	ctx      context.Context
+}
+
+func (d observedDB) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
+	rows, err := d.DB.Query(ctx, sql, args...)
+	if err != nil {
+		d.report(err)
+	}
+	return rows, err
+}
+
+func (d observedDB) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
+	tag, err := d.DB.Exec(ctx, sql, args...)
+	if err != nil {
+		d.report(err)
+	}
+	return tag, err
+}
+
+func (d observedDB) BeginTx(ctx context.Context, opts pgx.TxOptions) (pgx.Tx, error) {
+	return d.DB.BeginTx(ctx, opts)
+}
+func (d observedDB) report(err error) {
+	if d.observer == nil {
+		return
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.SQLState() != "" {
+		d.observer.CountDatabaseError(sqlStateClass(pgErr.SQLState()))
+		return
+	}
+	if isTransportError(err) {
+		d.observer.CountDatabaseError("08")
+	}
+}
+
+func WithObserver(db DB, observer ErrorObserver) DB {
+	if observer == nil {
+		return db
+	}
+	return observedDB{DB: db, observer: observer}
+}
+
 type Config struct {
 	URL             string
 	MaxConns        int32
@@ -124,6 +176,13 @@ const (
 	constraintRoomForeignKey = "bookings_room_id_fkey"
 	constraintTimeOrder      = "bookings_time_order"
 )
+
+func sqlStateClass(sqlstate string) string {
+	if len(sqlstate) < 2 {
+		return "unknown"
+	}
+	return sqlstate[:2]
+}
 
 func translateError(err error) error {
 	if err == nil {
