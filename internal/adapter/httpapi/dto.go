@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/lemonbw/booking-api/internal/domain"
@@ -36,6 +38,25 @@ func newBookingResponse(b domain.Booking) bookingResponse {
 		UpdatedAt:   b.UpdatedAt,
 		CancelledAt: b.CancelledAt,
 	}
+}
+
+type Duration time.Duration
+
+func (d *Duration) UnmarshalJSON(data []byte) error {
+	var raw string
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return fmt.Errorf("duration must be a string such as \"24h\": %w", err)
+	}
+	parsed, err := time.ParseDuration(raw)
+	if err != nil {
+		return fmt.Errorf("duration %q is not valid, use a form such as \"24h\": %w", raw, err)
+	}
+	*d = Duration(parsed)
+	return nil
+}
+
+func (d Duration) MarshalJSON() ([]byte, error) {
+	return json.Marshal(time.Duration(d).String())
 }
 
 type listBookingsResponse struct {
