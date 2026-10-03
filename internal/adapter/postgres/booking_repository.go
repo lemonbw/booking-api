@@ -183,7 +183,7 @@ func (r *BookingRepository) GetByID(ctx context.Context, id domain.BookingID) (d
 	}
 	return row.toDomain(), nil
 }
-func (r *BookingRepository) ListActiveByRoomAndRange(ctx context.Context, roomID domain.RoomID, rng domain.TimeRange) ([]domain.Booking, error) {
+func (r *BookingRepository) ListActiveByRoomAndRange(ctx context.Context, roomID domain.RoomID, rng domain.TimeRange, limit, offset int) ([]domain.Booking, error) {
 	const q = `
 		SELECT ` + bookingColumns + `
 		FROM bookings
@@ -191,9 +191,10 @@ func (r *BookingRepository) ListActiveByRoomAndRange(ctx context.Context, roomID
 		  AND status = 'active'
 		  AND start_time < $3
 		  AND end_time   > $2
-		ORDER BY start_time ASC, id ASC`
+		ORDER BY start_time ASC, id ASC
+		LIMIT $4 OFFSET $5`
 
-	rows, err := r.db.Query(ctx, q, int64(roomID), rng.Start, rng.End)
+	rows, err := r.db.Query(ctx, q, int64(roomID), rng.Start, rng.End, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("query bookings: %w", translateError(err))
 	}
@@ -203,8 +204,11 @@ func (r *BookingRepository) ListActiveByRoomAndRange(ctx context.Context, roomID
 	}
 	return bookings, nil
 }
+
+const overlappingScanLimit = 1000
+
 func (r *BookingRepository) FindActiveOverlapping(ctx context.Context, roomID domain.RoomID, rng domain.TimeRange) ([]domain.Booking, error) {
-	return r.ListActiveByRoomAndRange(ctx, roomID, rng)
+	return r.ListActiveByRoomAndRange(ctx, roomID, rng, overlappingScanLimit, 0)
 }
 
 func (r *BookingRepository) Cancel(ctx context.Context, id domain.BookingID, at time.Time) (domain.Booking, error) {

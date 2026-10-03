@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/lemonbw/booking-api/internal/platform/logger"
+	"github.com/lemonbw/booking-api/internal/usecase"
 )
 
 type Config struct {
@@ -20,6 +21,7 @@ type Config struct {
 
 type Booking struct {
 	MaxSeriesOccurrence int
+	PageSize            int
 }
 
 type HTTP struct {
@@ -66,6 +68,7 @@ func Load() (Config, error) {
 		},
 		Booking: Booking{
 			MaxSeriesOccurrence: envInt("BOOKING_MAX_SERIES_OCCURRENCES", 52),
+			PageSize:            envInt("BOOKING_PAGE_SIZE", 100),
 		},
 		Log: logger.Config{
 			Level:  env("LOG_LEVEL", "info"),
@@ -109,6 +112,9 @@ func (c Config) validate() error {
 	if c.Booking.MaxSeriesOccurrence <= 0 {
 		errs = append(errs, errors.New("BOOKING_MAX_SERIES_OCCURRENCES must be positive"))
 	}
+	if c.Booking.PageSize <= 0 || c.Booking.PageSize > usecase.MaxPageSize {
+		errs = append(errs, fmt.Errorf("BOOKING_PAGE_SIZE must be between 1 and %d", usecase.MaxPageSize))
+	}
 	return errors.Join(errs...)
 }
 func env(key, fallback string) string {
@@ -141,8 +147,8 @@ func envDuration(key string, fallback time.Duration) time.Duration {
 }
 func (c Config) Redacted() string {
 	return fmt.Sprintf(
-		"http_addr=%s read_timeout=%s shutdown_timeout=%s db_max_conns=%d db_wait_timeout=%s log_level=%s",
+		"http_addr=%s read_timeout=%s shutdown_timeout=%s db_max_conns=%d db_wait_timeout=%s page_size=%d log_level=%s",
 		c.HTTP.Addr, c.HTTP.ReadTimeout, c.HTTP.ShutdownTimeout,
-		c.Database.MaxConns, c.Database.WaitTimeout, c.Log.Level,
+		c.Database.MaxConns, c.Database.WaitTimeout, c.Booking.PageSize, c.Log.Level,
 	)
 }
