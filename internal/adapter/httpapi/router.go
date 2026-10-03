@@ -17,13 +17,16 @@ type HealthChecker interface {
 func NewRouter(h *Handler, health HealthChecker) http.Handler {
 	mux := http.NewServeMux()
 
+	api := http.NewServeMux()
 	mux.HandleFunc("POST /bookings", h.CreateBooking)
 	mux.HandleFunc("POST /bookings/series", h.CreateBookingSeries)
-	mux.HandleFunc("GET /bookings", h.ListRoomBookings)
-	mux.HandleFunc("GET /bookings/{id}", h.GetBooking)
-	mux.HandleFunc("POST /bookings/{id}/cancel", h.CancelBooking)
-	mux.HandleFunc("GET /rooms", h.ListRooms)
-	mux.HandleFunc("GET /rooms/{id}", h.GetRoom)
+	api.HandleFunc("GET /bookings", h.ListRoomBookings)
+	api.HandleFunc("GET /bookings/{id}", h.GetBooking)
+	api.HandleFunc("POST /bookings/{id}/cancel", h.CancelBooking)
+	api.HandleFunc("GET /rooms", h.ListRooms)
+	api.HandleFunc("GET /rooms/{id}", h.GetRoom)
+
+	mux.Handle("/api/v1/", http.StripPrefix("/api/v1", api))
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
