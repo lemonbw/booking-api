@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -144,15 +147,64 @@ func (r *BookingRepository) CreateMany(ctx context.Context, bookings []domain.Bo
 	}
 	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
 
-	inserted := make([]domain.Booking, 0, len(bookings))
-	for _, booking := range bookings {
-		const q = `
-			INSERT INTO bookings (id, series_id, room_id, user_name, start_time, end_time, status, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
-			RETURNING ` + bookingColumns
+	query, args := buildInsertMany(bookings)
+	rows, err := tx.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("insert bookings: %w", translateError(err))
+	}
+	inserted, err := collectBookings(rows)
+	if err != nil {
+		return nil, fmt.Errorf("collect inserted bookings: %w", translateError(err))
+	}
+	sort.Slice(inserted, func(i, j int) bool {
+		if inserted[i].StartTime.Equal(inserted[j].StartTime) {
+			return inserted[i].ID < inserted[j].ID
+		}
+		return inserted[i].StartTime.Before(inserted[j].StartTime)
+	})
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit bookings: %w", translateError(err))
+	}
+	return inserted, nil
+}
 
-		row, err := queryOne(ctx, tx, q,
-			booking.ID,
+const insertManyColumns = `(id, series_id, room_id, user_name, start_time, end_time, status, created_at, updated_at)`
+
+const argsPerBooking = 8
+
+func buildInsertMany(bookings []domain.Booking) (string, []any) {
+	var sb strings.Builder
+	sb.WriteString("INSERT INTO bookings ")
+	sb.WriteString(insertManyColumns)
+	sb.WriteString("\n\tVALUES ")
+	args := make([]any, 0, len(bookings)*argsPerBooking)
+	for i, booking := range bookings {
+		if i > 0 {
+			sb.WriteString(",\n\t\t")
+		}
+		first := i*argsPerBooking + 1
+		stamp := first + argsPerBooking - 1
+		sb.WriteString("($")
+		sb.WriteString(strconv.Itoa(first))
+		sb.WriteString(", $")
+		sb.WriteString(strconv.Itoa(first + 1))
+		sb.WriteString(", $")
+		sb.WriteString(strconv.Itoa(first + 2))
+		sb.WriteString(", $")
+		sb.WriteString(strconv.Itoa(first + 3))
+		sb.WriteString(", $")
+		sb.WriteString(strconv.Itoa(first + 4))
+		sb.WriteString(", $")
+		sb.WriteString(strconv.Itoa(first + 5))
+		sb.WriteString(", $")
+		sb.WriteString(strconv.Itoa(first + 6))
+		sb.WriteString(", $")
+		sb.WriteString(strconv.Itoa(stamp))
+		sb.WriteString(", $")
+		sb.WriteString(strconv.Itoa(stamp))
+		sb.WriteString(")")
+		args = append(args,
+			string(booking.ID),
 			nullableSeriesID(booking.SeriesID),
 			int64(booking.RoomID),
 			booking.UserName,
@@ -161,15 +213,10 @@ func (r *BookingRepository) CreateMany(ctx context.Context, bookings []domain.Bo
 			string(booking.Status),
 			booking.CreatedAt,
 		)
-		if err != nil {
-			return nil, fmt.Errorf("insert booking %s: %w", booking.ID, translateError(err))
-		}
-		inserted = append(inserted, row.toDomain())
 	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("commit bookings: %w", translateError(err))
-	}
-	return inserted, nil
+	sb.WriteString("\n\tRETURNING ")
+	sb.WriteString(bookingColumns)
+	return sb.String(), args
 }
 func (r *BookingRepository) GetByID(ctx context.Context, id domain.BookingID) (domain.Booking, error) {
 	const q = `SELECT ` + bookingColumns + ` FROM bookings WHERE id = $1`
