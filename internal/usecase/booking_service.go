@@ -107,7 +107,13 @@ func NewBookingService(bookings BookingRepository, rooms RoomRepository, clock C
 		pageSize:       pageSize,
 	}
 }
+
 func (s *BookingService) CreateBooking(ctx context.Context, cmd CreateBookingCommand) (domain.Booking, error) {
+	booking, err := s.createBooking(ctx, cmd)
+	s.count("created", err)
+	return booking, err
+}
+func (s *BookingService) createBooking(ctx context.Context, cmd CreateBookingCommand) (domain.Booking, error) {
 	now := s.clock.Now().UTC()
 
 	if cmd.RoomID <= 0 {
@@ -135,7 +141,6 @@ func (s *BookingService) CreateBooking(ctx context.Context, cmd CreateBookingCom
 	if err != nil {
 		return domain.Booking{}, s.interpretCreateError(ctx, booking, err)
 	}
-	s.count("created", err)
 	s.log.InfoContext(ctx, "booking created",
 		"booking_id", created.ID,
 		"room_id", created.RoomID,
@@ -144,6 +149,11 @@ func (s *BookingService) CreateBooking(ctx context.Context, cmd CreateBookingCom
 	return created, nil
 }
 func (s *BookingService) CreateBookingSeries(ctx context.Context, cmd CreateSeriesCommand) ([]domain.Booking, error) {
+	bookings, err := s.createBookingSeries(ctx, cmd)
+	s.count("series_created", err)
+	return bookings, err
+}
+func (s *BookingService) createBookingSeries(ctx context.Context, cmd CreateSeriesCommand) ([]domain.Booking, error) {
 	now := s.clock.Now().UTC()
 
 	if cmd.RoomID <= 0 {
@@ -190,7 +200,6 @@ func (s *BookingService) CreateBookingSeries(ctx context.Context, cmd CreateSeri
 	if err != nil {
 		return nil, s.interpretCreateError(ctx, bookings[0], err)
 	}
-	s.count("series_created", err)
 	s.log.InfoContext(ctx, "booking series created",
 		"series_id", series.ID,
 		"room_id", series.RoomID,
@@ -264,6 +273,11 @@ func (s *BookingService) GetBooking(ctx context.Context, id domain.BookingID) (d
 	return s.bookings.GetByID(ctx, id)
 }
 func (s *BookingService) CancelBooking(ctx context.Context, id domain.BookingID, by Principal) (domain.Booking, error) {
+	booking, err := s.cancelBooking(ctx, id, by)
+	s.count("cancelled", err)
+	return booking, err
+}
+func (s *BookingService) cancelBooking(ctx context.Context, id domain.BookingID, by Principal) (domain.Booking, error) {
 	if id == "" {
 		return domain.Booking{}, domain.NewFieldError("id", domain.ErrInvalidBookingID)
 	}
@@ -278,7 +292,6 @@ func (s *BookingService) CancelBooking(ctx context.Context, id domain.BookingID,
 	if err != nil {
 		return domain.Booking{}, err
 	}
-	s.count("cancelled", err)
 	s.log.InfoContext(ctx, "booking cancelled",
 		"booking_id", booking.ID,
 		"room_id", booking.RoomID,
