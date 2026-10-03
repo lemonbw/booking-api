@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -15,21 +14,24 @@ import (
 )
 
 type Handler struct {
-	svc usecase.BookingUseCase
-	log *slog.Logger
-	now func() time.Time
+	svc     usecase.BookingUseCase
+	log     *slog.Logger
+	now     func() time.Time
+	maxBody int64
 }
 
-func NewHandler(svc usecase.BookingUseCase, log *slog.Logger, now func() time.Time) *Handler {
+func NewHandler(svc usecase.BookingUseCase, log *slog.Logger, now func() time.Time, maxBody int64) *Handler {
 	if now == nil {
 		now = func() time.Time { return time.Now().UTC() }
 	}
-	return &Handler{svc: svc, log: log, now: now}
+	if maxBody <= 0 {
+		maxBody = defaultMaxBodyBytes
+	}
+	return &Handler{svc: svc, log: log, now: now, maxBody: maxBody}
 }
 func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 	var req createBookingRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_json", "body", "request body must be valid JSON")
+	if !h.decodeBody(w, r, &req) {
 		return
 	}
 	booking, err := h.svc.CreateBooking(r.Context(), usecase.CreateBookingCommand{
@@ -47,8 +49,7 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 }
 func (h *Handler) CreateBookingSeries(w http.ResponseWriter, r *http.Request) {
 	var req createBookingSeriesRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_json", "body", err.Error())
+	if !h.decodeBody(w, r, &req) {
 		return
 	}
 	bookings, err := h.svc.CreateBookingSeries(r.Context(), usecase.CreateSeriesCommand{

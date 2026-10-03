@@ -91,7 +91,7 @@ func run() error {
 		Batch:     cfg.Operations.PurgeBatch,
 	})
 
-	handler := httpapi.NewHandler(svc, log, clk.Now)
+	handler := httpapi.NewHandler(svc, log, clk.Now, cfg.HTTP.MaxRequestBody)
 	srv := &http.Server{
 		Addr:              cfg.HTTP.Addr,
 		Handler:           httpapi.NewRouter(handler, pool, auth, log, registry),

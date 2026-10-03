@@ -115,7 +115,7 @@ func newTextLogger(w io.Writer) *slog.Logger {
 }
 
 func newTestHandler(svc usecase.BookingUseCase) *Handler {
-	return NewHandler(svc, discardLogger(), func() time.Time { return testNow })
+	return NewHandler(svc, discardLogger(), func() time.Time { return testNow }, defaultMaxBodyBytes)
 }
 
 func fixtureBooking() domain.Booking {
@@ -171,4 +171,31 @@ func decodeError(t *testing.T, rec *httptest.ResponseRecorder) errorResponse {
 	var payload errorResponse
 	decodeBody(t, rec, &payload)
 	return payload
+}
+
+func newTestHandlerWithLimit(svc usecase.BookingUseCase, limit int64) *Handler {
+	return NewHandler(svc, discardLogger(), func() time.Time { return testNow }, limit)
+}
+
+func newRequest(method, target string, body io.Reader) *http.Request {
+	return httptest.NewRequest(method, target, body)
+}
+
+func serveRaw(t *testing.T, h *Handler, request *http.Request) *httptest.ResponseRecorder {
+	t.Helper()
+
+	rec := httptest.NewRecorder()
+	newTestMux(h).ServeHTTP(rec, request)
+	return rec
+}
+
+type countingReader struct {
+	io.Reader
+	read int64
+}
+
+func (r *countingReader) Read(p []byte) (int, error) {
+	n, err := r.Reader.Read(p)
+	r.read += int64(n)
+	return n, err
 }
