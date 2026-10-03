@@ -13,6 +13,7 @@ import (
 
 const bookingColumns = `
 	id::text        AS id,
+	series_id::text AS series_id,
 	room_id,
 	user_name,
 	start_time,
@@ -24,6 +25,7 @@ const bookingColumns = `
 
 type bookingRow struct {
 	ID          string     `db:"id"`
+	SeriesID    *string    `db:"series_id"`
 	RoomID      int64      `db:"room_id"`
 	UserName    string     `db:"user_name"`
 	StartTime   time.Time  `db:"start_time"`
@@ -46,6 +48,9 @@ func (r bookingRow) toDomain() domain.Booking {
 		Status:    domain.BookingStatus(r.Status),
 		CreatedAt: r.CreatedAt.UTC(),
 		UpdatedAt: r.UpdatedAt.UTC(),
+	}
+	if r.SeriesID != nil {
+		booking.SeriesID = domain.SeriesID(*r.SeriesID)
 	}
 	if r.CancelledAt != nil {
 		utc := r.CancelledAt.UTC()
@@ -121,6 +126,51 @@ func (r *BookingRepository) Create(ctx context.Context, booking domain.Booking) 
 	}
 	return row.toDomain(), nil
 }
+
+func nullableSeriesID(id domain.SeriesID) any {
+	if id == "" {
+		return nil
+	}
+	return string(id)
+}
+func (r *BookingRepository) CreateMany(ctx context.Context, bookings []domain.Booking) ([]domain.Booking, error) {
+	if len(bookings) == 0 {
+		return []domain.Booking{}, nil
+	}
+
+	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
+	if err != nil {
+		return nil, fmt.Errorf("begin transaction: %w", translateError(err))
+	}
+	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
+
+	inserted := make([]domain.Booking, 0, len(bookings))
+	for _, booking := range bookings {
+		const q = `
+			INSERT INTO bookings (id, series_id, room_id, user_name, start_time, end_time, status, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
+			RETURNING ` + bookingColumns
+
+		row, err := queryOne(ctx, tx, q,
+			booking.ID,
+			nullableSeriesID(booking.SeriesID),
+			int64(booking.RoomID),
+			booking.UserName,
+			booking.StartTime,
+			booking.EndTime,
+			string(booking.Status),
+			booking.CreatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("insert booking %s: %w", booking.ID, translateError(err))
+		}
+		inserted = append(inserted, row.toDomain())
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit bookings: %w", translateError(err))
+	}
+	return inserted, nil
+}
 func (r *BookingRepository) GetByID(ctx context.Context, id domain.BookingID) (domain.Booking, error) {
 	const q = `SELECT ` + bookingColumns + ` FROM bookings WHERE id = $1`
 
@@ -133,7 +183,7 @@ func (r *BookingRepository) GetByID(ctx context.Context, id domain.BookingID) (d
 	}
 	return row.toDomain(), nil
 }
-func (r *BookingRepository) ListActiveByRoomAndRange(ctx context.Context, roomID domain.RoomID, rng domain.TimeRange, limit, offset int) ([]domain.Booking, error) {
+func (r *BookingRepository) ListActiveByRoomAndRange(ctx context.Context, roomID domain.RoomID, rng domain.TimeRange) ([]domain.Booking, error) {
 	const q = `
 		SELECT ` + bookingColumns + `
 		FROM bookings
@@ -141,10 +191,9 @@ func (r *BookingRepository) ListActiveByRoomAndRange(ctx context.Context, roomID
 		  AND status = 'active'
 		  AND start_time < $3
 		  AND end_time   > $2
-		ORDER BY start_time ASC, id ASC
-		LIMIT $4 OFFSET $5`
+		ORDER BY start_time ASC, id ASC`
 
-	rows, err := r.db.Query(ctx, q, int64(roomID), rng.Start, rng.End, limit, offset)
+	rows, err := r.db.Query(ctx, q, int64(roomID), rng.Start, rng.End)
 	if err != nil {
 		return nil, fmt.Errorf("query bookings: %w", translateError(err))
 	}
@@ -155,10 +204,8 @@ func (r *BookingRepository) ListActiveByRoomAndRange(ctx context.Context, roomID
 	return bookings, nil
 }
 func (r *BookingRepository) FindActiveOverlapping(ctx context.Context, roomID domain.RoomID, rng domain.TimeRange) ([]domain.Booking, error) {
-	return r.ListActiveByRoomAndRange(ctx, roomID, rng, overlappingScanLimit, 0)
+	return r.ListActiveByRoomAndRange(ctx, roomID, rng)
 }
-
-const overlappingScanLimit = 1000
 
 func (r *BookingRepository) Cancel(ctx context.Context, id domain.BookingID, at time.Time) (domain.Booking, error) {
 	const q = `
