@@ -49,14 +49,25 @@ func TestTranslateErrorMapsConstraintsToDomainErrors(t *testing.T) {
 func TestTranslateErrorMapsMalformedIdentifiers(t *testing.T) {
 	t.Parallel()
 
-	err := translateError(&pgconn.PgError{Code: sqlStateDataException, ColumnName: "id"})
-	if !errors.Is(err, domain.ErrInvalidBookingID) {
-		t.Fatalf("translateError() = %v, want ErrInvalidBookingID", err)
+	cases := map[string]struct {
+		message string
+		want    error
+	}{
+		"malformed uuid":      {message: `invalid input syntax for type uuid: "b-missing"`, want: domain.ErrInvalidBookingID},
+		"malformed timestamp": {message: `invalid input syntax for type timestamp with time zone: "tomorrow"`, want: domain.ErrInvalidTimeRange},
+		"malformed date":      {message: `invalid input syntax for type date: "03.03.2026"`, want: domain.ErrInvalidTimeRange},
+		"malformed number":    {message: `invalid input syntax for type integer: "seven"`, want: domain.ErrInvalidTimeRange},
 	}
 
-	err = translateError(&pgconn.PgError{Code: sqlStateDataException, ColumnName: "start_time"})
-	if !errors.Is(err, domain.ErrInvalidTimeRange) {
-		t.Fatalf("translateError() = %v, want ErrInvalidTimeRange", err)
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			err := translateError(&pgconn.PgError{Code: sqlStateDataException, Message: tc.message})
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("translateError(%q) = %v, want %v", tc.message, err, tc.want)
+			}
+		})
 	}
 }
 

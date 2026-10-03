@@ -215,10 +215,10 @@ func translateError(err error) error {
 		return fmt.Errorf("%w: check constraint %s violated", domain.ErrIntegrity, pgErr.ConstraintName)
 
 	case pgErr.Code == sqlStateDataException:
-		if pgErr.ColumnName == "id" {
+		if strings.Contains(pgErr.Message, "type uuid") {
 			return fmt.Errorf("%w: malformed identifier", domain.ErrInvalidBookingID)
 		}
-		return fmt.Errorf("%w: malformed value in column %s", domain.ErrInvalidTimeRange, pgErr.ColumnName)
+		return fmt.Errorf("%w: malformed value: %s", domain.ErrInvalidTimeRange, pgErr.Message)
 
 	case pgErr.Code == sqlStateUniqueViolation:
 
