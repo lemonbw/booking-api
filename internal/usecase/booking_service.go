@@ -15,6 +15,7 @@ type CreateBookingCommand struct {
 	UserName  string
 	StartTime time.Time
 	EndTime   time.Time
+	By        Principal
 }
 
 type CreateSeriesCommand struct {
@@ -24,6 +25,7 @@ type CreateSeriesCommand struct {
 	EndTime   time.Time
 	Interval  time.Duration
 	Count     int
+	By        Principal
 }
 
 type Principal struct {
@@ -109,6 +111,10 @@ func (s *BookingService) CreateBooking(ctx context.Context, cmd CreateBookingCom
 	if cmd.RoomID <= 0 {
 		return domain.Booking{}, domain.NewFieldError("room_id", domain.ErrInvalidRoomID)
 	}
+	owner, err := s.resolveOwner(cmd.By, cmd.UserName)
+	if err != nil {
+		return domain.Booking{}, err
+	}
 	if _, err := s.ensureRoomExists(ctx, cmd.RoomID); err != nil {
 		return domain.Booking{}, err
 	}
@@ -116,7 +122,7 @@ func (s *BookingService) CreateBooking(ctx context.Context, cmd CreateBookingCom
 	if err != nil {
 		return domain.Booking{}, fmt.Errorf("generate booking id: %w", err)
 	}
-	booking, err := domain.NewBooking(domain.BookingID(id), "", cmd.RoomID, cmd.UserName, cmd.StartTime, cmd.EndTime, now)
+	booking, err := domain.NewBooking(domain.BookingID(id), "", cmd.RoomID, owner, cmd.StartTime, cmd.EndTime, now)
 	if err != nil {
 		return domain.Booking{}, err
 	}
@@ -140,6 +146,10 @@ func (s *BookingService) CreateBookingSeries(ctx context.Context, cmd CreateSeri
 	if cmd.RoomID <= 0 {
 		return nil, domain.NewFieldError("room_id", domain.ErrInvalidRoomID)
 	}
+	owner, err := s.resolveOwner(cmd.By, cmd.UserName)
+	if err != nil {
+		return nil, err
+	}
 	if _, err := s.ensureRoomExists(ctx, cmd.RoomID); err != nil {
 		return nil, err
 	}
@@ -148,7 +158,7 @@ func (s *BookingService) CreateBookingSeries(ctx context.Context, cmd CreateSeri
 		return nil, fmt.Errorf("generate series id: %w", err)
 	}
 	series, err := domain.NewSeries(
-		domain.SeriesID(seriesID), cmd.RoomID, cmd.UserName,
+		domain.SeriesID(seriesID), cmd.RoomID, owner,
 		domain.NewTimeRange(cmd.StartTime, cmd.EndTime),
 		cmd.Interval, cmd.Count, s.maxOccurrences,
 		now,
@@ -272,6 +282,26 @@ func (s *BookingService) ListRooms(ctx context.Context) ([]domain.Room, error) {
 }
 func (s *BookingService) GetRoom(ctx context.Context, id domain.RoomID) (domain.Room, error) {
 	return s.ensureRoomExists(ctx, id)
+}
+
+func (s *BookingService) resolveOwner(by Principal, requested string) (string, error) {
+	requested = strings.TrimSpace(requested)
+	if !by.Authenticated {
+		if requested == "" {
+			return Anonymous.Subject, nil
+		}
+		return requested, nil
+	}
+	if by.Admin {
+		if requested == "" {
+			return by.Identity(), nil
+		}
+		return requested, nil
+	}
+	if requested != "" && !by.CanActOn(requested) {
+		return "", domain.NewFieldError("user_name", domain.ErrForbidden)
+	}
+	return by.Identity(), nil
 }
 func (s *BookingService) ensureRoomExists(ctx context.Context, id domain.RoomID) (domain.Room, error) {
 	room, err := s.rooms.GetByID(ctx, id)
