@@ -37,6 +37,7 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 		UserName:  req.UserName,
 		StartTime: req.StartTime,
 		EndTime:   req.EndTime,
+		By:        PrincipalFromContext(r.Context()),
 	})
 	if err != nil {
 		h.writeServiceError(w, r, err)
@@ -57,6 +58,7 @@ func (h *Handler) CreateBookingSeries(w http.ResponseWriter, r *http.Request) {
 		EndTime:   req.EndTime,
 		Interval:  time.Duration(req.Interval),
 		Count:     req.Count,
+		By:        PrincipalFromContext(r.Context()),
 	})
 	if err != nil {
 		h.writeServiceError(w, r, err)
@@ -124,7 +126,7 @@ func (h *Handler) GetBooking(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, newBookingResponse(booking))
 }
 func (h *Handler) CancelBooking(w http.ResponseWriter, r *http.Request) {
-	booking, err := h.svc.CancelBooking(r.Context(), domain.BookingID(r.PathValue("id")))
+	booking, err := h.svc.CancelBooking(r.Context(), domain.BookingID(r.PathValue("id")), PrincipalFromContext(r.Context()))
 	if err != nil {
 		h.writeServiceError(w, r, err)
 		return
