@@ -17,10 +17,14 @@ import (
 type Handler struct {
 	svc usecase.BookingUseCase
 	log *slog.Logger
+	now func() time.Time
 }
 
-func NewHandler(svc usecase.BookingUseCase, log *slog.Logger) *Handler {
-	return &Handler{svc: svc, log: log}
+func NewHandler(svc usecase.BookingUseCase, log *slog.Logger, now func() time.Time) *Handler {
+	if now == nil {
+		now = func() time.Time { return time.Now().UTC() }
+	}
+	return &Handler{svc: svc, log: log, now: now}
 }
 func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 	var req createBookingRequest
@@ -84,7 +88,7 @@ func (h *Handler) ListRoomBookings(w http.ResponseWriter, r *http.Request) {
 		h.writeServiceError(w, r, err)
 		return
 	}
-	day, err := requiredDayQuery(r)
+	day, err := h.parseDateQuery(r)
 	if err != nil {
 		h.writeServiceError(w, r, err)
 		return
@@ -103,7 +107,7 @@ func (h *Handler) ListRoomBookings(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, listBookingsResponse{
 		RoomID:   roomID,
-		Day:      day.Format(time.DateOnly),
+		Date:     day.Format(time.DateOnly),
 		Bookings: responses,
 	})
 }
@@ -196,14 +200,14 @@ func requiredInt64Query(r *http.Request, key string) (int64, error) {
 	return value, nil
 }
 
-func requiredDayQuery(r *http.Request) (time.Time, error) {
-	raw := strings.TrimSpace(r.URL.Query().Get("day"))
+func (h *Handler) parseDateQuery(r *http.Request) (time.Time, error) {
+	raw := strings.TrimSpace(r.URL.Query().Get("date"))
 	if raw == "" {
-		return time.Time{}, domain.NewFieldError("day", errors.New("query parameter is required"))
+		return h.now().UTC(), nil
 	}
 	day, err := time.Parse(time.DateOnly, raw)
 	if err != nil {
-		return time.Time{}, domain.NewFieldError("day", errors.New("must be formatted as YYYY-MM-DD"))
+		return time.Time{}, domain.NewFieldError("date", errors.New("must be formatted as YYYY-MM-DD"))
 	}
 	return day.UTC(), nil
 }

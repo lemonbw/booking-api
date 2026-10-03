@@ -80,7 +80,7 @@ type bookingSeriesResponse struct {
 
 type listBookingsResponse struct {
 	RoomID   int64             `json:"room_id"`
-	Day      string            `json:"day"`
+	Date     string            `json:"date"`
 	Bookings []bookingResponse `json:"bookings"`
 }
 

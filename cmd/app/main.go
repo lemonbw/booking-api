@@ -62,7 +62,7 @@ func run() error {
 	clk := clock.New()
 	svc := usecase.NewBookingService(bookingRepo, roomRepo, clk, idgen.NewUUIDGenerator(), log, cfg.Booking.MaxSeriesOccurrence)
 
-	handler := httpapi.NewHandler(svc, log)
+	handler := httpapi.NewHandler(svc, log, clk.Now)
 	srv := &http.Server{
 		Addr:              cfg.HTTP.Addr,
 		Handler:           httpapi.NewRouter(handler, pool),
