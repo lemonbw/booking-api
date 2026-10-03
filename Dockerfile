@@ -13,7 +13,7 @@ ARG VERSION=dev
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -mod=vendor \
     -trimpath \
-    -ldflags="-s -w -X main.version=${VERSION}" \
+    -ldflags="-s -w -X github.com/lemonbw/booking-api/internal/platform/version.Version=${VERSION}" \
     -o /out/booking-api \
     ./cmd/app
 
