@@ -19,8 +19,8 @@ func NewRouter(h *Handler, health HealthChecker, auth Authenticator, log *slog.L
 	mux := http.NewServeMux()
 
 	api := http.NewServeMux()
-	mux.HandleFunc("POST /bookings", h.CreateBooking)
-	mux.HandleFunc("POST /bookings/series", h.CreateBookingSeries)
+	api.HandleFunc("POST /bookings", h.CreateBooking)
+	api.HandleFunc("POST /bookings/series", h.CreateBookingSeries)
 	api.HandleFunc("GET /bookings", h.ListRoomBookings)
 	api.HandleFunc("GET /bookings/{id}", h.GetBooking)
 	api.HandleFunc("POST /bookings/{id}/cancel", h.CancelBooking)
