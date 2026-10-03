@@ -39,6 +39,8 @@ not above the code.
 
 - Verify all checks with `make fmt`, `make vet`, `make test` before every commit.
 - Conventional Commits, one logical change per commit.
+- Keep `README.md`, `CHANGELOG.md` and `Notes.md` aligned with shipped behavior.
+- Booking cancellation is available as `DELETE /api/v1/bookings/{id}`; preserve the documented POST alias unless a breaking API release is intended.
 - Keep files focused: one topic per file, no file over ~300 lines.
 - Every minor release is followed by at least one real bugfix patch.
 - The domain layer must never import another project package.

@@ -42,6 +42,7 @@ func TestRouterServesTheVersionedRoutes(t *testing.T) {
 		{method: http.MethodPost, target: "/api/v1/bookings/series", body: `{"room_id":7,"user_name":"ada","start_time":"2026-03-03T09:00:00Z","end_time":"2026-03-03T10:00:00Z","interval":"24h","count":1}`, status: http.StatusCreated},
 		{method: http.MethodGet, target: "/api/v1/bookings?room_id=7", status: http.StatusOK},
 		{method: http.MethodGet, target: "/api/v1/bookings/b-1", status: http.StatusOK},
+		{method: http.MethodDelete, target: "/api/v1/bookings/b-1", status: http.StatusOK},
 		{method: http.MethodPost, target: "/api/v1/bookings/b-1/cancel", status: http.StatusOK},
 		{method: http.MethodGet, target: "/api/v1/rooms", status: http.StatusOK},
 		{method: http.MethodGet, target: "/api/v1/rooms/7", status: http.StatusOK},
@@ -103,7 +104,7 @@ func TestRouterAnswersAWrongMethodWithJson(t *testing.T) {
 		target string
 		allow  []string
 	}{
-		"delete a booking": {method: http.MethodDelete, target: "/api/v1/bookings/b-1", allow: []string{http.MethodGet}},
+		"put a booking":    {method: http.MethodPut, target: "/api/v1/bookings/b-1", allow: []string{http.MethodGet, http.MethodDelete}},
 		"post to the list": {method: http.MethodPut, target: "/api/v1/bookings", allow: []string{http.MethodGet, http.MethodPost}},
 		"put a room":       {method: http.MethodPut, target: "/api/v1/rooms/7", allow: []string{http.MethodGet}},
 		"get a cancel":     {method: http.MethodGet, target: "/api/v1/bookings/b-1/cancel", allow: []string{http.MethodPost}},

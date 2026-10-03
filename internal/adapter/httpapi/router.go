@@ -22,6 +22,7 @@ func NewRouter(h *Handler, health HealthChecker, auth Authenticator, log *slog.L
 	api.HandleFunc("POST /bookings/series", h.CreateBookingSeries)
 	api.HandleFunc("GET /bookings", h.ListRoomBookings)
 	api.HandleFunc("GET /bookings/{id}", h.GetBooking)
+	api.HandleFunc("DELETE /bookings/{id}", h.CancelBooking)
 	api.HandleFunc("POST /bookings/{id}/cancel", h.CancelBooking)
 	api.HandleFunc("GET /rooms", h.ListRooms)
 	api.HandleFunc("GET /rooms/{id}", h.GetRoom)
