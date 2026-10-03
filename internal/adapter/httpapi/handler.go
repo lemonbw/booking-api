@@ -112,10 +112,8 @@ func (h *Handler) GetRoom(w http.ResponseWriter, r *http.Request) {
 }
 func (h *Handler) writeServiceError(w http.ResponseWriter, r *http.Request, err error) {
 	var fieldErr *domain.FieldError
-	switch {
-	case errors.As(err, &fieldErr):
-		writeError(w, http.StatusBadRequest, "validation_failed", fieldErr.Field, err.Error())
 
+	switch {
 	case errors.Is(err, context.DeadlineExceeded):
 		writeError(w, http.StatusGatewayTimeout, "timeout", "", "the request took too long to complete")
 
@@ -138,6 +136,9 @@ func (h *Handler) writeServiceError(w http.ResponseWriter, r *http.Request, err 
 
 	case errors.Is(err, domain.ErrIntegrity):
 		writeError(w, http.StatusInternalServerError, "internal_error", "", "internal error")
+
+	case errors.As(err, &fieldErr):
+		writeError(w, http.StatusBadRequest, "validation_failed", fieldErr.Field, err.Error())
 
 	default:
 		h.log.ErrorContext(r.Context(), "unhandled request error", "error", err, "path", r.URL.Path)
