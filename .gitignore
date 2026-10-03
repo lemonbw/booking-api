@@ -1,0 +1,23 @@
+# Build artefacts
+/bin/
+/dist/
+booking-api
+*.exe
+
+# Local environment overrides
+.env
+.env.local
+*.local
+
+# Tooling caches
+/.cache/
+/coverage.out
+/coverage.html
+
+# Editor / OS noise
+.idea/
+.vscode/
+.DS_Store
+
+# Personal project notes
+Notes.md
