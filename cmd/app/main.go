@@ -59,10 +59,13 @@ func run() error {
 		return err
 	}
 
+	registry := metrics.New()
+	registry.SetBuildInfo(version.Version)
+
 	bookingRepo := postgres.NewBookingRepository(pool)
 	roomRepo := postgres.NewRoomRepository(pool)
 	clk := clock.New()
-	svc := usecase.NewBookingService(bookingRepo, roomRepo, clk, idgen.NewUUIDGenerator(), log, cfg.Booking.MaxSeriesOccurrence, cfg.Booking.PageSize)
+	svc := usecase.NewBookingService(bookingRepo, roomRepo, clk, idgen.NewUUIDGenerator(), log, registry, cfg.Booking.MaxSeriesOccurrence, cfg.Booking.PageSize)
 
 	auth, err := httpapi.AuthenticatorFromConfig(httpapi.AuthConfig{
 		Mode:         cfg.Security.AuthMode,
@@ -75,9 +78,6 @@ func run() error {
 	if err != nil {
 		return err
 	}
-
-	registry := metrics.New()
-	registry.SetBuildInfo(version.Version)
 
 	handler := httpapi.NewHandler(svc, log, clk.Now)
 	srv := &http.Server{

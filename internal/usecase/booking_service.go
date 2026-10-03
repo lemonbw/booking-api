@@ -85,12 +85,13 @@ type BookingService struct {
 	clock    Clock
 	ids      IDGenerator
 	log      Logger
+	counter  OperationCounter
 
 	maxOccurrences int
 	pageSize       int
 }
 
-func NewBookingService(bookings BookingRepository, rooms RoomRepository, clock Clock, ids IDGenerator, log Logger, maxOccurrences, pageSize int) *BookingService {
+func NewBookingService(bookings BookingRepository, rooms RoomRepository, clock Clock, ids IDGenerator, log Logger, counter OperationCounter, maxOccurrences, pageSize int) *BookingService {
 	if log == nil {
 		log = nopLogger{}
 	}
@@ -100,6 +101,7 @@ func NewBookingService(bookings BookingRepository, rooms RoomRepository, clock C
 		clock:    clock,
 		ids:      ids,
 		log:      log,
+		counter:  counter,
 
 		maxOccurrences: maxOccurrences,
 		pageSize:       pageSize,
@@ -133,6 +135,7 @@ func (s *BookingService) CreateBooking(ctx context.Context, cmd CreateBookingCom
 	if err != nil {
 		return domain.Booking{}, s.interpretCreateError(ctx, booking, err)
 	}
+	s.count("created", err)
 	s.log.InfoContext(ctx, "booking created",
 		"booking_id", created.ID,
 		"room_id", created.RoomID,
@@ -187,6 +190,7 @@ func (s *BookingService) CreateBookingSeries(ctx context.Context, cmd CreateSeri
 	if err != nil {
 		return nil, s.interpretCreateError(ctx, bookings[0], err)
 	}
+	s.count("series_created", err)
 	s.log.InfoContext(ctx, "booking series created",
 		"series_id", series.ID,
 		"room_id", series.RoomID,
@@ -274,6 +278,7 @@ func (s *BookingService) CancelBooking(ctx context.Context, id domain.BookingID,
 	if err != nil {
 		return domain.Booking{}, err
 	}
+	s.count("cancelled", err)
 	s.log.InfoContext(ctx, "booking cancelled",
 		"booking_id", booking.ID,
 		"room_id", booking.RoomID,
@@ -350,3 +355,30 @@ type nopLogger struct{}
 func (nopLogger) InfoContext(context.Context, string, ...any)  {}
 func (nopLogger) WarnContext(context.Context, string, ...any)  {}
 func (nopLogger) ErrorContext(context.Context, string, ...any) {}
+
+func (s *BookingService) count(kind string, err error) {
+	if s.counter == nil {
+		return
+	}
+	if err == nil {
+		s.counter.CountBooking(kind, "ok")
+		return
+	}
+	outcome := "error"
+	for _, sentinel := range []struct {
+		err  error
+		name string
+	}{
+		{domain.ErrOverlap, "conflict"},
+		{domain.ErrForbidden, "forbidden"},
+		{domain.ErrBookingInPast, "in_past"},
+		{domain.ErrBookingAlreadyStarted, "already_started"},
+		{domain.ErrUnavailable, "unavailable"},
+	} {
+		if errors.Is(err, sentinel.err) {
+			outcome = sentinel.name
+			break
+		}
+	}
+	s.counter.CountBooking(kind, outcome)
+}

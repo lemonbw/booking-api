@@ -30,6 +30,10 @@ type Clock interface {
 type IDGenerator interface {
 	NewID() (string, error)
 }
+
+type OperationCounter interface {
+	CountBooking(kind, outcome string)
+}
 type Logger interface {
 	InfoContext(ctx context.Context, msg string, args ...any)
 	WarnContext(ctx context.Context, msg string, args ...any)
