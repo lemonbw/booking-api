@@ -40,6 +40,44 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusCreated, newBookingResponse(booking))
 }
+func (h *Handler) CreateBookingSeries(w http.ResponseWriter, r *http.Request) {
+	var req createBookingSeriesRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json", "body", err.Error())
+		return
+	}
+	bookings, err := h.svc.CreateBookingSeries(r.Context(), usecase.CreateSeriesCommand{
+		RoomID:    domain.RoomID(req.RoomID),
+		UserName:  req.UserName,
+		StartTime: req.StartTime,
+		EndTime:   req.EndTime,
+		Interval:  time.Duration(req.Interval),
+		Count:     req.Count,
+	})
+	if err != nil {
+		h.writeServiceError(w, r, err)
+		return
+	}
+	if len(bookings) == 0 {
+		h.log.ErrorContext(r.Context(), "series created without occurrences", "room_id", req.RoomID)
+		writeError(w, http.StatusInternalServerError, "internal_error", "", "internal error")
+		return
+	}
+	responses := make([]bookingResponse, 0, len(bookings))
+	for _, b := range bookings {
+		responses = append(responses, newBookingResponse(b))
+	}
+	writeJSON(w, http.StatusCreated, bookingSeriesResponse{
+		SeriesID:   string(bookings[0].SeriesID),
+		RoomID:     int64(bookings[0].RoomID),
+		UserName:   bookings[0].UserName,
+		Count:      len(responses),
+		Interval:   req.Interval,
+		FirstStart: bookings[0].StartTime,
+		LastEnd:    bookings[len(bookings)-1].EndTime,
+		Bookings:   responses,
+	})
+}
 func (h *Handler) ListRoomBookings(w http.ResponseWriter, r *http.Request) {
 	roomID, err := requiredInt64Query(r, "room_id")
 	if err != nil {

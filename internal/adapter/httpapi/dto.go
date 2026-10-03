@@ -59,6 +59,25 @@ func (d Duration) MarshalJSON() ([]byte, error) {
 	return json.Marshal(time.Duration(d).String())
 }
 
+type createBookingSeriesRequest struct {
+	RoomID    int64     `json:"room_id"`
+	UserName  string    `json:"user_name"`
+	StartTime time.Time `json:"start_time"`
+	EndTime   time.Time `json:"end_time"`
+	Interval  Duration  `json:"interval"`
+	Count     int       `json:"count"`
+}
+type bookingSeriesResponse struct {
+	SeriesID   string            `json:"series_id"`
+	RoomID     int64             `json:"room_id"`
+	UserName   string            `json:"user_name"`
+	Count      int               `json:"count"`
+	Interval   Duration          `json:"interval"`
+	FirstStart time.Time         `json:"first_start"`
+	LastEnd    time.Time         `json:"last_end"`
+	Bookings   []bookingResponse `json:"bookings"`
+}
+
 type listBookingsResponse struct {
 	RoomID   int64             `json:"room_id"`
 	Day      string            `json:"day"`

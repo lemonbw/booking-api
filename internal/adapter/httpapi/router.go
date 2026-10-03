@@ -18,6 +18,7 @@ func NewRouter(h *Handler, health HealthChecker) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("POST /bookings", h.CreateBooking)
+	mux.HandleFunc("POST /bookings/series", h.CreateBookingSeries)
 	mux.HandleFunc("GET /bookings", h.ListRoomBookings)
 	mux.HandleFunc("GET /bookings/{id}", h.GetBooking)
 	mux.HandleFunc("POST /bookings/{id}/cancel", h.CancelBooking)
