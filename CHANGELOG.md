@@ -18,6 +18,91 @@
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-10-03
+
+### Fixed
+
+- Dockerfile передавал версию в `main.version`, которого в коде нет: сборка шла
+  успешно, но `build_info` в образе всегда показывал `dev`. Путь пакета
+  `internal/platform/version` исправлен, версия из `--build-arg VERSION`
+  доходит до бинаря.
+
+### Added
+
+- `README.md`: запуск, таблица маршрутов и кодов ошибок, все переменные
+  окружения с умолчаниями, структура проекта, команды разработки.
+
+### Commits
+
+| Коммит | Сообщение |
+| --- | --- |
+| `7406d9b` | docs: add the readme, stamp the version into the image |
+
+## [0.7.1] - 2026-10-03
+
+Разбиение перегруженных файлов по темам. Поведение не менялось: тот же набор
+тестов с `-race` и живой базой проходит и до, и после.
+
+### Changed
+
+- `internal/usecase`: `booking_service.go` (442 строки) разделён на
+  `booking_service.go`, `series.go`, `principal.go`, `ownership.go`,
+  `retention.go`; крупнейший файл пакета — 171 строка.
+- `internal/platform/metrics`: `metrics.go` (358 строк) разделён на `registry.go`,
+  `counter.go`, `histogram.go`, `gauge.go`, `text.go`; крупнейший — 114 строк.
+- `internal/adapter/httpapi`: `middleware.go` разделён на `auth_middleware.go`,
+  `requestid.go`, `trace.go`, `accesslog.go`, `route_pattern.go`,
+  `metrics_middleware.go`.
+
+### Commits
+
+| Коммит | Сообщение |
+| --- | --- |
+| `7af89b3` | refactor: split the service, the metric registry and the middleware by topic |
+
+## [0.7.0] - 2026-10-03
+
+Аудит безопасности и производительности. Тело запроса ограничено, серия
+вставляется одним оператором, репозитории покрыты интеграционными тестами на
+живой базе. Покрытие пакета `postgres` выросло с 11.9% до 43.1%.
+
+### Fixed
+
+- `HTTP_MAX_BODY_BYTES` проверялся в конфигурации и нигде не применялся: размер
+  тела запроса не ограничен, клиент мог прислать столько, сколько захочет.
+  Теперь чтение ограничено через `http.MaxBytesReader`, превышение отвечает
+  `413 body_too_large`.
+- Неизвестное поле в теле запросы игнорировалось: опечатка `user_nmae` приводила
+  к брони от анонимного пользователя вместо ошибки. Декод раздела стал строгим
+  (`DisallowUnknownFields`), тело с двумя JSON-объектами тоже отвергается.
+- `translateError` определял невалидный идентификатор по полю `ColumnName`,
+  которое PostgreSQL для SQLSTATE `22P02` не заполняет. Такая ошибка уезжала в
+  «неверный интервал времени». Тип теперь читается из сообщения сервера.
+- Гонка при создании бронии: предварительная проверка пересечений не защищает,
+  окончательный ответ даёт ограничение `EXCLUDE`. Подтверждено тестом на живой базе.
+
+### Changed
+
+- Вставка серии: 52 отдельных `INSERT` в цикле заменены одним запросом. Замер на
+  той же базе: ~69 мс против ~1.1 мс на сервере базы; при сетевом подключении
+  выигрыш больше, так как раундтрипов было 52 вместо одного. Порядок строк на
+  выходе задаётся сортировкой по времени начала, а не порядком `RETURNING`.
+
+### Added
+
+- Интеграционные тесты репозиториев: запись и чтение, массовая вставка серии,
+  откат серии при конфликте, 12 параллельных вставок с одним победителем,
+  атомарность отмены, фоновая уборка, каскад при удалении комнаты, постраничное
+  чтение. Пропускают себя без `DATABASE_URL` и удаляют свои строки.
+
+### Commits
+
+| Коммит | Сообщение |
+| --- | --- |
+| `3d80517` | test(storage): exercise the repositories against a live database |
+| `5251e67` | fix(storage): read the malformed value out of the sqlstate message |
+| `ca2f2ed` | perf(storage): insert every series occurrence in one statement |
+
 ## [0.6.1] - 2026-10-03
 
 ### Fixed
@@ -375,6 +460,9 @@
 | `315cc10` | feat(app): add entrypoint that migrates, serves and shuts down gracefully |
 
 [Unreleased]: ./CHANGELOG.md
+[0.7.2]: ./CHANGELOG.md
+[0.7.1]: ./CHANGELOG.md
+[0.7.0]: ./CHANGELOG.md
 [0.6.1]: ./CHANGELOG.md
 [0.6.0]: ./CHANGELOG.md
 [0.5.1]: ./CHANGELOG.md
