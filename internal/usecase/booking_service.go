@@ -16,6 +16,11 @@ type CreateBookingCommand struct {
 	EndTime   time.Time
 }
 
+type ListBookingsQuery struct {
+	RoomID domain.RoomID
+	Day    time.Time
+}
+
 type BookingService struct {
 	bookings BookingRepository
 	rooms    RoomRepository
@@ -66,6 +71,52 @@ func (s *BookingService) CreateBooking(ctx context.Context, cmd CreateBookingCom
 		"user", created.UserName,
 	)
 	return created, nil
+}
+func (s *BookingService) ListRoomBookings(ctx context.Context, q ListBookingsQuery) ([]domain.Booking, error) {
+	if q.RoomID <= 0 {
+		return nil, domain.NewFieldError("room_id", domain.ErrInvalidRoomID)
+	}
+	if _, err := s.ensureRoomExists(ctx, q.RoomID); err != nil {
+		return nil, err
+	}
+	bookings, err := s.bookings.ListActiveByRoomAndRange(ctx, q.RoomID, domain.DayBounds(q.Day))
+	if err != nil {
+		return nil, fmt.Errorf("list bookings: %w", err)
+	}
+	if bookings == nil {
+		bookings = []domain.Booking{}
+	}
+	return bookings, nil
+}
+func (s *BookingService) GetBooking(ctx context.Context, id domain.BookingID) (domain.Booking, error) {
+	if id == "" {
+		return domain.Booking{}, domain.NewFieldError("id", domain.ErrInvalidBookingID)
+	}
+	return s.bookings.GetByID(ctx, id)
+}
+func (s *BookingService) CancelBooking(ctx context.Context, id domain.BookingID) (domain.Booking, error) {
+	if id == "" {
+		return domain.Booking{}, domain.NewFieldError("id", domain.ErrInvalidBookingID)
+	}
+	booking, err := s.bookings.Cancel(ctx, id, s.clock.Now().UTC())
+	if err != nil {
+		return domain.Booking{}, err
+	}
+	s.log.InfoContext(ctx, "booking cancelled", "booking_id", booking.ID, "room_id", booking.RoomID)
+	return booking, nil
+}
+func (s *BookingService) ListRooms(ctx context.Context) ([]domain.Room, error) {
+	rooms, err := s.rooms.List(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list rooms: %w", err)
+	}
+	if rooms == nil {
+		rooms = []domain.Room{}
+	}
+	return rooms, nil
+}
+func (s *BookingService) GetRoom(ctx context.Context, id domain.RoomID) (domain.Room, error) {
+	return s.ensureRoomExists(ctx, id)
 }
 func (s *BookingService) ensureRoomExists(ctx context.Context, id domain.RoomID) (domain.Room, error) {
 	room, err := s.rooms.GetByID(ctx, id)

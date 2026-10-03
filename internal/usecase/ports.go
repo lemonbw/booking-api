@@ -12,7 +12,7 @@ type BookingRepository interface {
 
 	GetByID(ctx context.Context, id domain.BookingID) (domain.Booking, error)
 
-	ListActiveByRoomAndRange(ctx context.Context, roomID domain.RoomID, r domain.TimeRange, limit, offset int) ([]domain.Booking, error)
+	ListActiveByRoomAndRange(ctx context.Context, roomID domain.RoomID, r domain.TimeRange) ([]domain.Booking, error)
 
 	FindActiveOverlapping(ctx context.Context, roomID domain.RoomID, r domain.TimeRange) ([]domain.Booking, error)
 
@@ -32,4 +32,18 @@ type Logger interface {
 	InfoContext(ctx context.Context, msg string, args ...any)
 	WarnContext(ctx context.Context, msg string, args ...any)
 	ErrorContext(ctx context.Context, msg string, args ...any)
+}
+
+type BookingUseCase interface {
+	CreateBooking(ctx context.Context, cmd CreateBookingCommand) (domain.Booking, error)
+
+	ListRoomBookings(ctx context.Context, q ListBookingsQuery) ([]domain.Booking, error)
+
+	GetBooking(ctx context.Context, id domain.BookingID) (domain.Booking, error)
+
+	CancelBooking(ctx context.Context, id domain.BookingID) (domain.Booking, error)
+
+	ListRooms(ctx context.Context) ([]domain.Room, error)
+
+	GetRoom(ctx context.Context, id domain.RoomID) (domain.Room, error)
 }
