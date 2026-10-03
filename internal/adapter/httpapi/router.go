@@ -29,6 +29,16 @@ func NewRouter(h *Handler, health HealthChecker, auth Authenticator, log *slog.L
 
 	mux.Handle("/api/v1/", http.StripPrefix("/api/v1", authMiddleware(api, auth, log)))
 
+	if metrics != nil {
+		mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+			w.WriteHeader(http.StatusOK)
+			if _, err := w.Write([]byte(metrics.Render())); err != nil {
+				log.Warn("failed to render metrics", "error", err)
+			}
+		})
+	}
+
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
