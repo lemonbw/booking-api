@@ -102,6 +102,8 @@ var (
 )
 
 const (
+	sqlStateDataException = "22P02"
+
 	sqlStateExclusionViolation  = "23P01"
 	sqlStateForeignKeyViolation = "23503"
 	sqlStateCheckViolation      = "23514"
@@ -146,6 +148,12 @@ func translateError(err error) error {
 			return fmt.Errorf("%w: constraint %s", domain.ErrInvalidTimeRange, pgErr.ConstraintName)
 		}
 		return fmt.Errorf("%w: check constraint %s violated", domain.ErrIntegrity, pgErr.ConstraintName)
+
+	case pgErr.Code == sqlStateDataException:
+		if pgErr.ColumnName == "id" {
+			return fmt.Errorf("%w: malformed identifier", domain.ErrInvalidBookingID)
+		}
+		return fmt.Errorf("%w: malformed value in column %s", domain.ErrInvalidTimeRange, pgErr.ColumnName)
 
 	case pgErr.Code == sqlStateUniqueViolation:
 
