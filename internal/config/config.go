@@ -18,6 +18,7 @@ type Config struct {
 	Booking    Booking
 	Security   Security
 	Operations Operations
+	Migrations Migrations
 	Log        logger.Config
 }
 
@@ -43,6 +44,10 @@ type HTTP struct {
 	IdleTimeout       time.Duration
 	ShutdownTimeout   time.Duration
 	MaxRequestBody    int64
+}
+
+type Migrations struct {
+	Mode string
 }
 
 type Operations struct {
@@ -86,6 +91,9 @@ func Load() (Config, error) {
 		Booking: Booking{
 			MaxSeriesOccurrence: envInt("BOOKING_MAX_SERIES_OCCURRENCES", 52),
 			PageSize:            envInt("BOOKING_PAGE_SIZE", 100),
+		},
+		Migrations: Migrations{
+			Mode: strings.ToLower(env("MIGRATIONS_MODE", "apply")),
 		},
 		Operations: Operations{
 			Retention:     envDuration("RETENTION_CANCELLED", 90*24*time.Hour),
@@ -154,6 +162,11 @@ func (c Config) validate() error {
 		if len(c.Security.HeaderSecret) < 32 {
 			errs = append(errs, errors.New("AUTH_HEADER_SECRET must be at least 32 characters"))
 		}
+	}
+	switch c.Migrations.Mode {
+	case "apply", "check":
+	default:
+		errs = append(errs, fmt.Errorf("MIGRATIONS_MODE %q is not one of apply, check", c.Migrations.Mode))
 	}
 	if c.Operations.Retention < 0 {
 		errs = append(errs, errors.New("RETENTION_CANCELLED must not be negative"))

@@ -22,7 +22,25 @@ const migrationsLockKey int64 = 8_240_117_113_004_2
 
 const migrationsLockTimeout = 30 * time.Second
 
-func Migrate(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger) error {
+type Mode string
+
+const (
+	ModeApply Mode = "apply"
+
+	ModeCheck Mode = "check"
+)
+
+func ParseMode(value string) (Mode, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", string(ModeApply):
+		return ModeApply, nil
+	case string(ModeCheck):
+		return ModeCheck, nil
+	default:
+		return "", fmt.Errorf("unknown migrations mode %q (expected %q or %q)", value, ModeApply, ModeCheck)
+	}
+}
+func Migrate(ctx context.Context, pool *pgxpool.Pool, mode Mode, log *slog.Logger) error {
 	if log == nil {
 		return errors.New("postgres.Migrate: logger must not be nil")
 	}
@@ -47,10 +65,21 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	var pending []string
 	for _, name := range names {
-		if applied[name] {
-			continue
+		if !applied[name] {
+			pending = append(pending, name)
 		}
+	}
+	if mode == ModeCheck {
+		if len(pending) > 0 {
+			return fmt.Errorf("database schema is out of date: pending migrations %s (run the migration job, or set MIGRATIONS_MODE=apply)",
+				strings.Join(pending, ", "))
+		}
+		log.Info("database schema is up to date", "migrations", len(applied))
+		return tx.Commit(ctx)
+	}
+	for _, name := range pending {
 		body, err := migrationFS.ReadFile("migrations/" + name)
 		if err != nil {
 			return fmt.Errorf("read migration %s: %w", name, err)

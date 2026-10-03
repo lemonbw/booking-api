@@ -55,7 +55,11 @@ func run() error {
 	}
 	defer pool.Close()
 
-	if err := postgres.Migrate(rootCtx, pool, log); err != nil {
+	migrationsMode, err := postgres.ParseMode(cfg.Migrations.Mode)
+	if err != nil {
+		return err
+	}
+	if err := postgres.Migrate(rootCtx, pool, migrationsMode, log); err != nil {
 		return err
 	}
 
