@@ -1,7 +1,6 @@
 package metrics
 
 import (
-	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -74,7 +73,7 @@ func (r *Registry) CountRateLimited(route string) {
 }
 
 func (r *Registry) SetBuildInfo(version string) {
-	r.buildInfo.set(1, version)
+	r.buildInfo.replace(1, version)
 }
 
 func (r *Registry) Render() string {
@@ -264,6 +263,13 @@ func (g *gauge) set(value float64, values ...string) {
 	g.mu.Unlock()
 }
 
+func (g *gauge) replace(value float64, values ...string) {
+	g.mu.Lock()
+	clear(g.values)
+	g.values[encodeLabels(g.labels, values)] = value
+	g.mu.Unlock()
+}
+
 func (g *gauge) writeTo(sb *strings.Builder) {
 	g.mu.Lock()
 	keys := make([]string, 0, len(g.values))
@@ -333,7 +339,7 @@ func joinLabelNames(labels map[string]string) string {
 
 	pairs := make([]string, 0, len(names))
 	for _, name := range names {
-		pairs = append(pairs, fmt.Sprintf("%s=%q", name, escapeLabelValue(labels[name])))
+		pairs = append(pairs, name+`="`+escapeLabelValue(labels[name])+`"`)
 	}
 	return strings.Join(pairs, ",")
 }
