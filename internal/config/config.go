@@ -16,7 +16,17 @@ type Config struct {
 	HTTP     HTTP
 	Database Database
 	Booking  Booking
+	Security Security
 	Log      logger.Config
+}
+
+type Security struct {
+	AuthMode     string
+	JWTSecret    string
+	JWTIssuer    string
+	JWTAudience  string
+	HeaderName   string
+	HeaderSecret string
 }
 
 type Booking struct {
@@ -70,6 +80,14 @@ func Load() (Config, error) {
 			MaxSeriesOccurrence: envInt("BOOKING_MAX_SERIES_OCCURRENCES", 52),
 			PageSize:            envInt("BOOKING_PAGE_SIZE", 100),
 		},
+		Security: Security{
+			AuthMode:     strings.ToLower(env("AUTH_MODE", "none")),
+			JWTSecret:    os.Getenv("AUTH_JWT_SECRET"),
+			JWTIssuer:    env("AUTH_JWT_ISSUER", ""),
+			JWTAudience:  env("AUTH_JWT_AUDIENCE", ""),
+			HeaderName:   env("AUTH_HEADER_NAME", "X-User-Name"),
+			HeaderSecret: os.Getenv("AUTH_HEADER_SECRET"),
+		},
 		Log: logger.Config{
 			Level:  env("LOG_LEVEL", "info"),
 			Format: env("LOG_FORMAT", "json"),
@@ -108,6 +126,22 @@ func (c Config) validate() error {
 	}
 	if c.HTTP.MaxRequestBody <= 0 {
 		errs = append(errs, errors.New("HTTP_MAX_BODY_BYTES must be positive"))
+	}
+	switch c.Security.AuthMode {
+	case "none", "jwt", "header":
+	default:
+		errs = append(errs, fmt.Errorf("AUTH_MODE %q is not one of none, jwt, header", c.Security.AuthMode))
+	}
+	if c.Security.AuthMode == "jwt" && len(c.Security.JWTSecret) < 32 {
+		errs = append(errs, errors.New("AUTH_JWT_SECRET must be at least 32 characters"))
+	}
+	if c.Security.AuthMode == "header" {
+		if strings.TrimSpace(c.Security.HeaderName) == "" {
+			errs = append(errs, errors.New("AUTH_HEADER_NAME must not be empty"))
+		}
+		if len(c.Security.HeaderSecret) < 32 {
+			errs = append(errs, errors.New("AUTH_HEADER_SECRET must be at least 32 characters"))
+		}
 	}
 	if c.Booking.MaxSeriesOccurrence <= 0 {
 		errs = append(errs, errors.New("BOOKING_MAX_SERIES_OCCURRENCES must be positive"))
