@@ -45,7 +45,7 @@ type BookingUseCase interface {
 
 	CreateBookingSeries(ctx context.Context, cmd CreateSeriesCommand) ([]domain.Booking, error)
 
-	CancelBooking(ctx context.Context, id domain.BookingID) (domain.Booking, error)
+	CancelBooking(ctx context.Context, id domain.BookingID, by Principal) (domain.Booking, error)
 
 	ListRooms(ctx context.Context) ([]domain.Room, error)
 

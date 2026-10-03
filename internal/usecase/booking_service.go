@@ -259,15 +259,26 @@ func (s *BookingService) GetBooking(ctx context.Context, id domain.BookingID) (d
 	}
 	return s.bookings.GetByID(ctx, id)
 }
-func (s *BookingService) CancelBooking(ctx context.Context, id domain.BookingID) (domain.Booking, error) {
+func (s *BookingService) CancelBooking(ctx context.Context, id domain.BookingID, by Principal) (domain.Booking, error) {
 	if id == "" {
 		return domain.Booking{}, domain.NewFieldError("id", domain.ErrInvalidBookingID)
+	}
+	existing, err := s.bookings.GetByID(ctx, id)
+	if err != nil {
+		return domain.Booking{}, err
+	}
+	if !by.CanManage(existing.UserName) {
+		return domain.Booking{}, domain.NewFieldError("id", domain.ErrForbidden)
 	}
 	booking, err := s.bookings.Cancel(ctx, id, s.clock.Now().UTC())
 	if err != nil {
 		return domain.Booking{}, err
 	}
-	s.log.InfoContext(ctx, "booking cancelled", "booking_id", booking.ID, "room_id", booking.RoomID)
+	s.log.InfoContext(ctx, "booking cancelled",
+		"booking_id", booking.ID,
+		"room_id", booking.RoomID,
+		"by", by.Identity(),
+	)
 	return booking, nil
 }
 func (s *BookingService) ListRooms(ctx context.Context) ([]domain.Room, error) {
