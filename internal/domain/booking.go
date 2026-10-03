@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -17,10 +18,13 @@ const (
 
 type BookingID string
 
+type SeriesID string
+
 const MaxUserNameLen = 255
 
 type Booking struct {
 	ID          BookingID
+	SeriesID    SeriesID
 	RoomID      RoomID
 	UserName    string
 	StartTime   time.Time
@@ -78,7 +82,7 @@ func DayBounds(day time.Time) TimeRange {
 	return TimeRange{Start: midnight, End: midnight.AddDate(0, 0, 1)}
 }
 
-func NewBooking(id BookingID, roomID RoomID, userName string, start, end, now time.Time) (Booking, error) {
+func NewBooking(id BookingID, seriesID SeriesID, roomID RoomID, userName string, start, end, now time.Time) (Booking, error) {
 	if strings.TrimSpace(string(id)) == "" {
 		return Booking{}, NewFieldError("id", ErrInvalidBookingID)
 	}
@@ -98,6 +102,7 @@ func NewBooking(id BookingID, roomID RoomID, userName string, start, end, now ti
 	createdAt := now.UTC()
 	return Booking{
 		ID:        id,
+		SeriesID:  seriesID,
 		RoomID:    roomID,
 		UserName:  strings.TrimSpace(userName),
 		StartTime: start,
@@ -106,6 +111,74 @@ func NewBooking(id BookingID, roomID RoomID, userName string, start, end, now ti
 		CreatedAt: createdAt,
 		UpdatedAt: createdAt,
 	}, nil
+}
+
+type Series struct {
+	ID       SeriesID
+	RoomID   RoomID
+	UserName string
+	First    TimeRange
+	Step     time.Duration
+	Count    int
+}
+
+func NewSeries(id SeriesID, roomID RoomID, userName string, first TimeRange, step time.Duration, count, maxCount int, now time.Time) (Series, error) {
+	if strings.TrimSpace(string(id)) == "" {
+		return Series{}, NewFieldError("series_id", errors.New("series id must not be empty"))
+	}
+	if roomID <= 0 {
+		return Series{}, NewFieldError("room_id", ErrInvalidRoomID)
+	}
+	if err := validateUserName(userName); err != nil {
+		return Series{}, err
+	}
+	if !first.Start.Before(first.End) {
+		return Series{}, NewFieldError("start_time", ErrInvalidTimeRange)
+	}
+	if step <= 0 {
+		return Series{}, NewFieldError("interval", ErrInvalidInterval)
+	}
+	if count <= 0 {
+		return Series{}, NewFieldError("count", errors.New("count must be at least 1"))
+	}
+	if maxCount > 0 && count > maxCount {
+		return Series{}, NewFieldError("count", fmt.Errorf("%w: maximum is %d, requested %d", ErrSeriesTooLong, maxCount, count))
+	}
+	series := Series{
+		ID:       id,
+		RoomID:   roomID,
+		UserName: strings.TrimSpace(userName),
+		First:    first,
+		Step:     step,
+		Count:    count,
+	}
+	now = now.UTC()
+	for i := range count {
+		occ := series.Occurrence(i)
+		if occ.Start.Before(now) {
+			return Series{}, NewFieldError("start_time", fmt.Errorf("%w: occurrence %d starts in the past", ErrBookingInPast, i+1))
+		}
+	}
+	return series, nil
+}
+func (s Series) Occurrence(i int) TimeRange {
+	offset := time.Duration(i) * s.Step
+	return TimeRange{
+		Start: s.First.Start.Add(offset).UTC(),
+		End:   s.First.End.Add(offset).UTC(),
+	}
+}
+func (s Series) Last() TimeRange { return s.Occurrence(s.Count - 1) }
+
+func (s Series) Bounds() TimeRange {
+	return TimeRange{Start: s.First.Start.UTC(), End: s.Last().End.UTC()}
+}
+func (s Series) Occurrences() []TimeRange {
+	out := make([]TimeRange, 0, s.Count)
+	for i := range s.Count {
+		out = append(out, s.Occurrence(i))
+	}
+	return out
 }
 
 func validateUserName(userName string) error {
