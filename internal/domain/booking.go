@@ -138,6 +138,10 @@ func NewSeries(id SeriesID, roomID RoomID, userName string, first TimeRange, ste
 	if step <= 0 {
 		return Series{}, NewFieldError("interval", ErrInvalidInterval)
 	}
+	if step < first.Duration() {
+		return Series{}, NewFieldError("interval", fmt.Errorf("%w: interval %s is shorter than the occurrence length %s, so occurrences would overlap each other",
+			ErrInvalidInterval, step, first.Duration()))
+	}
 	if count <= 0 {
 		return Series{}, NewFieldError("count", errors.New("count must be at least 1"))
 	}
