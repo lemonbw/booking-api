@@ -93,9 +93,21 @@ func (h *Handler) ListRoomBookings(w http.ResponseWriter, r *http.Request) {
 		h.writeServiceError(w, r, err)
 		return
 	}
+	limit, err := optionalPositiveIntQuery(r, "limit")
+	if err != nil {
+		h.writeServiceError(w, r, err)
+		return
+	}
+	offset, err := optionalNonNegativeIntQuery(r, "offset")
+	if err != nil {
+		h.writeServiceError(w, r, err)
+		return
+	}
 	bookings, err := h.svc.ListRoomBookings(r.Context(), usecase.ListBookingsQuery{
 		RoomID: domain.RoomID(roomID),
 		Day:    day,
+		Limit:  limit,
+		Offset: offset,
 	})
 	if err != nil {
 		h.writeServiceError(w, r, err)
@@ -196,6 +208,30 @@ func requiredInt64Query(r *http.Request, key string) (int64, error) {
 	value, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || value <= 0 {
 		return 0, domain.NewFieldError(key, errors.New("must be a positive integer"))
+	}
+	return value, nil
+}
+
+func optionalPositiveIntQuery(r *http.Request, key string) (int, error) {
+	raw := r.URL.Query().Get(key)
+	if raw == "" {
+		return 0, nil
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		return 0, domain.NewFieldError(key, errors.New("must be a positive integer"))
+	}
+	return value, nil
+}
+
+func optionalNonNegativeIntQuery(r *http.Request, key string) (int, error) {
+	raw := r.URL.Query().Get(key)
+	if raw == "" {
+		return 0, nil
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, domain.NewFieldError(key, errors.New("must be a non-negative integer"))
 	}
 	return value, nil
 }
