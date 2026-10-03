@@ -172,6 +172,9 @@ func (h *Handler) writeServiceError(w http.ResponseWriter, r *http.Request, err 
 	case errors.Is(err, domain.ErrBookingAlreadyStarted):
 		writeError(w, http.StatusConflict, "booking_already_started", "start_time", err.Error())
 
+	case errors.Is(err, domain.ErrForbidden):
+		writeError(w, http.StatusForbidden, "forbidden", "", "the authenticated identity may not act on this resource")
+
 	case errors.Is(err, domain.ErrRoomNotFound), errors.Is(err, domain.ErrBookingNotFound):
 		writeError(w, http.StatusNotFound, "not_found", "", "the requested resource does not exist")
 
