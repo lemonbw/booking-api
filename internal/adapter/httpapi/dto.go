@@ -78,10 +78,12 @@ type bookingSeriesResponse struct {
 	Bookings   []bookingResponse `json:"bookings"`
 }
 
-type listBookingsResponse struct {
-	RoomID   int64             `json:"room_id"`
-	Date     string            `json:"date"`
-	Bookings []bookingResponse `json:"bookings"`
+func newBookingListResponse(bookings []domain.Booking) []bookingResponse {
+	out := make([]bookingResponse, 0, len(bookings))
+	for _, b := range bookings {
+		out = append(out, newBookingResponse(b))
+	}
+	return out
 }
 
 type roomResponse struct {
@@ -89,8 +91,12 @@ type roomResponse struct {
 	Name string `json:"name"`
 }
 
-type listRoomsResponse struct {
-	Rooms []roomResponse `json:"rooms"`
+func newRoomListResponse(rooms []domain.Room) []roomResponse {
+	out := make([]roomResponse, 0, len(rooms))
+	for _, room := range rooms {
+		out = append(out, newRoomResponse(room))
+	}
+	return out
 }
 
 func newRoomResponse(r domain.Room) roomResponse {

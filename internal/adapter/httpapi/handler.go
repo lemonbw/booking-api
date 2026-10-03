@@ -113,15 +113,7 @@ func (h *Handler) ListRoomBookings(w http.ResponseWriter, r *http.Request) {
 		h.writeServiceError(w, r, err)
 		return
 	}
-	responses := make([]bookingResponse, 0, len(bookings))
-	for _, b := range bookings {
-		responses = append(responses, newBookingResponse(b))
-	}
-	writeJSON(w, http.StatusOK, listBookingsResponse{
-		RoomID:   roomID,
-		Date:     day.Format(time.DateOnly),
-		Bookings: responses,
-	})
+	writeJSON(w, http.StatusOK, newBookingListResponse(bookings))
 }
 func (h *Handler) GetBooking(w http.ResponseWriter, r *http.Request) {
 	booking, err := h.svc.GetBooking(r.Context(), domain.BookingID(r.PathValue("id")))
@@ -145,11 +137,7 @@ func (h *Handler) ListRooms(w http.ResponseWriter, r *http.Request) {
 		h.writeServiceError(w, r, err)
 		return
 	}
-	responses := make([]roomResponse, 0, len(rooms))
-	for _, room := range rooms {
-		responses = append(responses, newRoomResponse(room))
-	}
-	writeJSON(w, http.StatusOK, listRoomsResponse{Rooms: responses})
+	writeJSON(w, http.StatusOK, newRoomListResponse(rooms))
 }
 func (h *Handler) GetRoom(w http.ResponseWriter, r *http.Request) {
 	roomID, err := parseInt64(r.PathValue("id"))
