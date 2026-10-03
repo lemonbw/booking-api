@@ -10,6 +10,8 @@ import (
 type BookingRepository interface {
 	Create(ctx context.Context, booking domain.Booking) (domain.Booking, error)
 
+	CreateMany(ctx context.Context, bookings []domain.Booking) ([]domain.Booking, error)
+
 	GetByID(ctx context.Context, id domain.BookingID) (domain.Booking, error)
 
 	ListActiveByRoomAndRange(ctx context.Context, roomID domain.RoomID, r domain.TimeRange) ([]domain.Booking, error)
