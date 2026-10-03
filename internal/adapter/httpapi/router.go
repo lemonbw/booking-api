@@ -15,7 +15,7 @@ type HealthChecker interface {
 	Ping(ctx context.Context) error
 }
 
-func NewRouter(h *Handler, health HealthChecker, auth Authenticator, log *slog.Logger) http.Handler {
+func NewRouter(h *Handler, health HealthChecker, auth Authenticator, log *slog.Logger, metrics Metrics) http.Handler {
 	mux := http.NewServeMux()
 
 	api := http.NewServeMux()
@@ -40,5 +40,5 @@ func NewRouter(h *Handler, health HealthChecker, auth Authenticator, log *slog.L
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
 	})
 
-	return mux
+	return metricsMiddleware(metrics)(mux)
 }

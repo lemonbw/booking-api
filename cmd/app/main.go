@@ -15,6 +15,8 @@ import (
 	"github.com/lemonbw/booking-api/internal/platform/clock"
 	"github.com/lemonbw/booking-api/internal/platform/idgen"
 	"github.com/lemonbw/booking-api/internal/platform/logger"
+	"github.com/lemonbw/booking-api/internal/platform/metrics"
+	"github.com/lemonbw/booking-api/internal/platform/version"
 	"github.com/lemonbw/booking-api/internal/usecase"
 )
 
@@ -74,10 +76,13 @@ func run() error {
 		return err
 	}
 
+	registry := metrics.New()
+	registry.SetBuildInfo(version.Version)
+
 	handler := httpapi.NewHandler(svc, log, clk.Now)
 	srv := &http.Server{
 		Addr:              cfg.HTTP.Addr,
-		Handler:           httpapi.NewRouter(handler, pool, auth, log),
+		Handler:           httpapi.NewRouter(handler, pool, auth, log, registry),
 		ReadTimeout:       cfg.HTTP.ReadTimeout,
 		ReadHeaderTimeout: cfg.HTTP.ReadHeaderTimeout,
 		WriteTimeout:      cfg.HTTP.WriteTimeout,

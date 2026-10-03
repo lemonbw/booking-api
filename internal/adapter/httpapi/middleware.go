@@ -5,9 +5,19 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/lemonbw/booking-api/internal/usecase"
 )
+
+type Metrics interface {
+	ObserveRequest(route, method string, status int, d time.Duration)
+
+	CountBooking(kind, outcome string)
+
+	Render() string
+}
 
 type contextKey string
 
@@ -37,4 +47,68 @@ func authMiddleware(next http.Handler, auth Authenticator, log *slog.Logger) htt
 		}
 		next.ServeHTTP(w, r.WithContext(withPrincipal(r.Context(), principal)))
 	})
+}
+
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+	bytes  int
+}
+
+func (s *statusRecorder) WriteHeader(code int) {
+	if s.status == 0 {
+		s.status = code
+	}
+	s.ResponseWriter.WriteHeader(code)
+}
+
+func (s *statusRecorder) Write(b []byte) (int, error) {
+	if s.status == 0 {
+		s.status = http.StatusOK
+	}
+	n, err := s.ResponseWriter.Write(b)
+	s.bytes += n
+	return n, err
+}
+
+func statusOf(rec *statusRecorder) int {
+	if rec.status == 0 {
+		return http.StatusOK
+	}
+	return rec.status
+}
+
+const routeOther = "other"
+
+func routePatternFor(path string) string {
+	switch {
+	case path == "/healthz", path == "/readyz", path == "/metrics":
+		return path
+	case path == "/api/v1/bookings", path == "/api/v1/bookings/series", path == "/api/v1/rooms":
+		return path
+	case strings.HasPrefix(path, "/api/v1/bookings/"):
+		return "/api/v1/bookings/{id}"
+	case strings.HasPrefix(path, "/api/v1/rooms/"):
+		return "/api/v1/rooms/{roomID}"
+	default:
+		return routeOther
+	}
+}
+
+func metricsMiddleware(registry Metrics) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		if registry == nil {
+			return next
+		}
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !strings.HasPrefix(r.URL.Path, "/api/") {
+				next.ServeHTTP(w, r)
+				return
+			}
+			start := time.Now()
+			rec := &statusRecorder{ResponseWriter: w}
+			next.ServeHTTP(rec, r)
+			registry.ObserveRequest(routePatternFor(r.URL.Path), r.Method, statusOf(rec), time.Since(start))
+		})
+	}
 }
