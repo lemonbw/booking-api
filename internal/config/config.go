@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -81,7 +82,41 @@ func Load() (Config, error) {
 			Format: env("LOG_FORMAT", "json"),
 		},
 	}
+	if err := cfg.validate(); err != nil {
+		return Config{}, err
+	}
 	return cfg, nil
+}
+func (c Config) validate() error {
+	var errs []error
+
+	if strings.TrimSpace(c.Database.URL) == "" {
+		errs = append(errs, errors.New("DATABASE_URL must not be empty"))
+	}
+	if c.Database.MaxConns < 1 {
+		errs = append(errs, errors.New("DB_MAX_CONNS must be >= 1"))
+	}
+	if c.Database.MinConns < 0 || c.Database.MinConns > c.Database.MaxConns {
+		errs = append(errs, errors.New("DB_MIN_CONNS must be >= 0 and <= DB_MAX_CONNS"))
+	}
+	if strings.TrimSpace(c.HTTP.Addr) == "" {
+		errs = append(errs, errors.New("HTTP_ADDR must not be empty"))
+	}
+	for name, d := range map[string]time.Duration{
+		"HTTP_READ_TIMEOUT":        c.HTTP.ReadTimeout,
+		"HTTP_READ_HEADER_TIMEOUT": c.HTTP.ReadHeaderTimeout,
+		"HTTP_WRITE_TIMEOUT":       c.HTTP.WriteTimeout,
+		"HTTP_SHUTDOWN_TIMEOUT":    c.HTTP.ShutdownTimeout,
+		"DB_WAIT_TIMEOUT":          c.Database.WaitTimeout,
+	} {
+		if d <= 0 {
+			errs = append(errs, fmt.Errorf("%s must be positive", name))
+		}
+	}
+	if c.HTTP.MaxRequestBody <= 0 {
+		errs = append(errs, errors.New("HTTP_MAX_BODY_BYTES must be positive"))
+	}
+	return errors.Join(errs...)
 }
 func env(key, fallback string) string {
 	if v, ok := os.LookupEnv(key); ok && strings.TrimSpace(v) != "" {
