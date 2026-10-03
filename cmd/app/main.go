@@ -60,7 +60,7 @@ func run() error {
 	bookingRepo := postgres.NewBookingRepository(pool)
 	roomRepo := postgres.NewRoomRepository(pool)
 	clk := clock.New()
-	svc := usecase.NewBookingService(bookingRepo, roomRepo, clk, idgen.NewUUIDGenerator(), log)
+	svc := usecase.NewBookingService(bookingRepo, roomRepo, clk, idgen.NewUUIDGenerator(), log, cfg.Booking.MaxSeriesOccurrence)
 
 	handler := httpapi.NewHandler(svc, log)
 	srv := &http.Server{

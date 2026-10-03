@@ -14,7 +14,12 @@ import (
 type Config struct {
 	HTTP     HTTP
 	Database Database
+	Booking  Booking
 	Log      logger.Config
+}
+
+type Booking struct {
+	MaxSeriesOccurrence int
 }
 
 type HTTP struct {
