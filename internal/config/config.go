@@ -13,11 +13,12 @@ import (
 )
 
 type Config struct {
-	HTTP     HTTP
-	Database Database
-	Booking  Booking
-	Security Security
-	Log      logger.Config
+	HTTP       HTTP
+	Database   Database
+	Booking    Booking
+	Security   Security
+	Operations Operations
+	Log        logger.Config
 }
 
 type Security struct {
@@ -42,6 +43,11 @@ type HTTP struct {
 	IdleTimeout       time.Duration
 	ShutdownTimeout   time.Duration
 	MaxRequestBody    int64
+}
+
+type Operations struct {
+	PurgeInterval time.Duration
+	PurgeBatch    int
 }
 
 type Database struct {
@@ -79,6 +85,10 @@ func Load() (Config, error) {
 		Booking: Booking{
 			MaxSeriesOccurrence: envInt("BOOKING_MAX_SERIES_OCCURRENCES", 52),
 			PageSize:            envInt("BOOKING_PAGE_SIZE", 100),
+		},
+		Operations: Operations{
+			PurgeInterval: envDuration("PURGE_INTERVAL", time.Hour),
+			PurgeBatch:    envInt("PURGE_BATCH_SIZE", 500),
 		},
 		Security: Security{
 			AuthMode:     strings.ToLower(env("AUTH_MODE", "none")),
@@ -142,6 +152,12 @@ func (c Config) validate() error {
 		if len(c.Security.HeaderSecret) < 32 {
 			errs = append(errs, errors.New("AUTH_HEADER_SECRET must be at least 32 characters"))
 		}
+	}
+	if c.Operations.PurgeInterval <= 0 {
+		errs = append(errs, errors.New("PURGE_INTERVAL must be positive"))
+	}
+	if c.Operations.PurgeBatch <= 0 {
+		errs = append(errs, errors.New("PURGE_BATCH_SIZE must be positive"))
 	}
 	if c.Booking.MaxSeriesOccurrence <= 0 {
 		errs = append(errs, errors.New("BOOKING_MAX_SERIES_OCCURRENCES must be positive"))
