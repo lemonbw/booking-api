@@ -16,9 +16,20 @@ type CreateBookingCommand struct {
 	EndTime   time.Time
 }
 
+type CreateSeriesCommand struct {
+	RoomID    domain.RoomID
+	UserName  string
+	StartTime time.Time
+	EndTime   time.Time
+	Interval  time.Duration
+	Count     int
+}
+
 type ListBookingsQuery struct {
 	RoomID domain.RoomID
 	Day    time.Time
+	Limit  int
+	Offset int
 }
 
 type BookingService struct {
@@ -27,9 +38,12 @@ type BookingService struct {
 	clock    Clock
 	ids      IDGenerator
 	log      Logger
+
+	maxOccurrences int
+	pageSize       int
 }
 
-func NewBookingService(bookings BookingRepository, rooms RoomRepository, clock Clock, ids IDGenerator, log Logger) *BookingService {
+func NewBookingService(bookings BookingRepository, rooms RoomRepository, clock Clock, ids IDGenerator, log Logger, maxOccurrences, pageSize int) *BookingService {
 	if log == nil {
 		log = nopLogger{}
 	}
@@ -39,6 +53,9 @@ func NewBookingService(bookings BookingRepository, rooms RoomRepository, clock C
 		clock:    clock,
 		ids:      ids,
 		log:      log,
+
+		maxOccurrences: maxOccurrences,
+		pageSize:       pageSize,
 	}
 }
 func (s *BookingService) CreateBooking(ctx context.Context, cmd CreateBookingCommand) (domain.Booking, error) {
@@ -54,7 +71,7 @@ func (s *BookingService) CreateBooking(ctx context.Context, cmd CreateBookingCom
 	if err != nil {
 		return domain.Booking{}, fmt.Errorf("generate booking id: %w", err)
 	}
-	booking, err := domain.NewBooking(domain.BookingID(id), cmd.RoomID, cmd.UserName, cmd.StartTime, cmd.EndTime, now)
+	booking, err := domain.NewBooking(domain.BookingID(id), "", cmd.RoomID, cmd.UserName, cmd.StartTime, cmd.EndTime, now)
 	if err != nil {
 		return domain.Booking{}, err
 	}
@@ -72,6 +89,83 @@ func (s *BookingService) CreateBooking(ctx context.Context, cmd CreateBookingCom
 	)
 	return created, nil
 }
+func (s *BookingService) CreateBookingSeries(ctx context.Context, cmd CreateSeriesCommand) ([]domain.Booking, error) {
+	now := s.clock.Now().UTC()
+
+	if cmd.RoomID <= 0 {
+		return nil, domain.NewFieldError("room_id", domain.ErrInvalidRoomID)
+	}
+	if _, err := s.ensureRoomExists(ctx, cmd.RoomID); err != nil {
+		return nil, err
+	}
+	seriesID, err := s.ids.NewID()
+	if err != nil {
+		return nil, fmt.Errorf("generate series id: %w", err)
+	}
+	series, err := domain.NewSeries(
+		domain.SeriesID(seriesID), cmd.RoomID, cmd.UserName,
+		domain.NewTimeRange(cmd.StartTime, cmd.EndTime),
+		cmd.Interval, cmd.Count, s.maxOccurrences,
+		now,
+	)
+	if err != nil {
+		return nil, err
+	}
+	occurrences := series.Occurrences()
+	bookings := make([]domain.Booking, 0, len(occurrences))
+	for _, occurrence := range occurrences {
+		id, err := s.ids.NewID()
+		if err != nil {
+			return nil, fmt.Errorf("generate booking id: %w", err)
+		}
+		booking, err := domain.NewBooking(domain.BookingID(id), series.ID, series.RoomID, series.UserName,
+			occurrence.Start, occurrence.End, now)
+		if err != nil {
+			return nil, err
+		}
+		bookings = append(bookings, booking)
+	}
+	if err := s.preflightSeriesOverlap(ctx, series); err != nil {
+		return nil, err
+	}
+	created, err := s.bookings.CreateMany(ctx, bookings)
+	if err != nil {
+		return nil, s.interpretCreateError(ctx, bookings[0], err)
+	}
+	s.log.InfoContext(ctx, "booking series created",
+		"series_id", series.ID,
+		"room_id", series.RoomID,
+		"user", series.UserName,
+		"occurrences", len(created),
+	)
+	return created, nil
+}
+
+func (s *BookingService) preflightSeriesOverlap(ctx context.Context, series domain.Series) error {
+	conflicts, err := s.bookings.FindActiveOverlapping(ctx, series.RoomID, series.Bounds())
+	if err != nil {
+		return fmt.Errorf("check overlapping bookings: %w", err)
+	}
+	if len(conflicts) == 0 {
+		return nil
+	}
+	occurrences := series.Occurrences()
+	var blocked []domain.Booking
+	for _, booking := range conflicts {
+		window := domain.NewTimeRange(booking.StartTime, booking.EndTime)
+		for _, occurrence := range occurrences {
+			if window.Overlaps(occurrence) {
+				blocked = append(blocked, booking)
+				break
+			}
+		}
+	}
+	if len(blocked) > 0 {
+		return &domain.ConflictError{RoomID: series.RoomID, Conflicts: blocked}
+	}
+	return nil
+}
+
 func (s *BookingService) ListRoomBookings(ctx context.Context, q ListBookingsQuery) ([]domain.Booking, error) {
 	if q.RoomID <= 0 {
 		return nil, domain.NewFieldError("room_id", domain.ErrInvalidRoomID)
@@ -79,7 +173,8 @@ func (s *BookingService) ListRoomBookings(ctx context.Context, q ListBookingsQue
 	if _, err := s.ensureRoomExists(ctx, q.RoomID); err != nil {
 		return nil, err
 	}
-	bookings, err := s.bookings.ListActiveByRoomAndRange(ctx, q.RoomID, domain.DayBounds(q.Day))
+	limit, offset := s.normalizePage(q.Limit, q.Offset)
+	bookings, err := s.bookings.ListActiveByRoomAndRange(ctx, q.RoomID, domain.DayBounds(q.Day), limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("list bookings: %w", err)
 	}
@@ -87,6 +182,21 @@ func (s *BookingService) ListRoomBookings(ctx context.Context, q ListBookingsQue
 		bookings = []domain.Booking{}
 	}
 	return bookings, nil
+}
+
+const MaxPageSize = 500
+
+func (s *BookingService) normalizePage(limit, offset int) (int, int) {
+	switch {
+	case limit <= 0:
+		limit = s.pageSize
+	case limit > MaxPageSize:
+		limit = MaxPageSize
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	return limit, offset
 }
 func (s *BookingService) GetBooking(ctx context.Context, id domain.BookingID) (domain.Booking, error) {
 	if id == "" {
